@@ -316,7 +316,7 @@ def tts():
 
     audio_files.append({
         "filename": audio_path,
-        "url": f"http://{request.host}/static/wavs/{outname}",
+        "url": f"/static/wavs/{outname}",
         "inference_time": round(inter_time,2),
         "audio_duration": audio_duration
     })
