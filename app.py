@@ -169,10 +169,16 @@ def tts():
         "skip_refine": 0,
         "speed": 5,
         "text_seed": 42,
+        "speed": 5,
+        "text_seed": 42,
         "refine_max_new_token": 384,
         "infer_max_new_token": 2048,
         "wav": 0,
         "is_stream": 0,
+        # 是否返回分片音频，1=返回所有分片+合并文件，0=仅返回合并文件
+        "split": 0,
+        # 文本分片长度，0=自动（保持默认行为）
+        "segment_len": 0,
     }
 
     # 获取
@@ -196,7 +202,11 @@ def tts():
         request, "infer_max_new_token", defaults["infer_max_new_token"], int
     )
     wav = utils.get_parameter(request, "wav", defaults["wav"], int)
-
+    split_mode = utils.get_parameter(request, "split", defaults["split"], int)
+    segment_len = utils.get_parameter(request, "segment_len", defaults["segment_len"], int)
+        
+        
+    
     app.logger.info(f"[tts]{text=}\n{voice=},{skip_refine=}\n")
     if not text:
         return jsonify({"code": 1, "msg": "text params lost"})
@@ -240,9 +250,9 @@ def tts():
     start_time = time.time()
 
     # 中英按语言分行
-    text_list = [t.strip() for t in text.split("\n") if t.strip()]
-    new_text = utils.split_text(text_list)
-    if text_seed > 0:
+    text_list=[t.strip() for t in text.split("\n") if t.strip()]
+    new_text=utils.split_text(text_list, segment_len if segment_len>0 else None)
+    if text_seed>0:
         torch.manual_seed(text_seed)
 
     params_infer_code = ChatTTS.Chat.InferCodeParams(
@@ -352,24 +362,52 @@ def tts():
 
     audio_path = WAVS_DIR + "/" + outname
     try:
-        #  使用 soundfile
+        #  使用 soundfile 计算合并音频时长
         audio_info = sf.info(audio_path)
         audio_duration = round(audio_info.duration, 2)
     except Exception as e:
         print(f"计算音频时长失败: {e}")
         audio_duration = -1
 
-    relative_url = f"/static/wavs/{outname}"
-    audio_files.append(
-        {
+    # 根据 split_mode 决定返回内容
+    audio_files.clear()
+    if split_mode == 1:
+        # 返回所有分片音频
+        for idx, fname in enumerate(filename_list):
+            part_path = WAVS_DIR + '/' + fname
+            part_duration = -1
+            try:
+                part_info = sf.info(part_path)
+                part_duration = round(part_info.duration, 2)
+            except Exception as e:
+                print(f"计算分片音频时长失败: {part_path}, {e}")
+
+            audio_files.append({
+                "filename": part_path,
+                "url": f"/static/wavs/{fname}",
+                "inference_time": round(inter_time, 2),
+                "audio_duration": part_duration,
+                "part_index": idx + 1,
+                "is_merged": 0,
+            })
+
+        # 追加合并后的完整音频
+        audio_files.append({
             "filename": audio_path,
-            "url": f"http://{request.host}{relative_url}",
-            "relative_url": relative_url,
+            "url": f"/static/wavs/{outname}",
             "inference_time": round(inter_time, 2),
             "audio_duration": audio_duration,
-        }
-    )
-    result_dict = {"code": 0, "msg": "ok", "audio_files": audio_files}
+            "is_merged": 1,
+        })
+    else:
+        # 默认保持原行为：仅返回合并后的完整音频
+        audio_files.append({
+            "filename": audio_path,
+            "url": f"/static/wavs/{outname}",
+            "inference_time": round(inter_time, 2),
+            "audio_duration": audio_duration,
+        })
+    result_dict={"code": 0, "msg": "ok", "audio_files": audio_files}
     try:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -377,12 +415,17 @@ def tts():
         pass
     # 兼容pyVideoTrans接口调用
     if len(audio_files) == 1:
-        result_dict["filename"] = audio_files[0]["filename"]
-        result_dict["url"] = audio_files[0]["url"]
-        result_dict["relative_url"] = audio_files[0]["relative_url"]
+        result_dict["filename"] = audio_files[0]['filename']
+        result_dict["url"] = audio_files[0]['url']
 
+    # 如果请求直接返回 wav 文件，则优先返回合并后的音频（如存在）
     if wav > 0:
-        return send_file(audio_files[0]["filename"], mimetype="audio/x-wav")
+        target = audio_files[0]
+        for it in audio_files:
+            if isinstance(it, dict) and it.get("is_merged") == 1:
+                target = it
+                break
+        return send_file(target['filename'], mimetype='audio/x-wav')
     else:
         return jsonify(result_dict)
 
@@ -396,6 +439,68 @@ def clear_wavs():
     else:
         return jsonify({"code": 1, "msg": message})
 
+
+@app.route('/list_wavs', methods=['GET'])
+def list_wavs():
+    """列出当前 static/wavs 下的所有 wav 文件。"""
+    audio_files = []
+    try:
+        if not os.path.exists(WAVS_DIR):
+            return jsonify({"code": 0, "msg": "ok", "audio_files": audio_files})
+
+        for name in os.listdir(WAVS_DIR):
+            if not name.lower().endswith('.wav'):
+                continue
+            full_path = os.path.join(WAVS_DIR, name)
+            if not os.path.isfile(full_path):
+                continue
+
+            duration = -1
+            try:
+                info = sf.info(full_path)
+                duration = round(info.duration, 2)
+            except Exception as e:
+                print(f"计算音频时长失败: {full_path}, {e}")
+
+            stat = os.stat(full_path)
+            audio_files.append({
+                "filename": full_path,
+                "url": f"/static/wavs/{name}",
+                "inference_time": 0,
+                "audio_duration": duration,
+                "mtime": int(stat.st_mtime),
+            })
+
+        audio_files.sort(key=lambda x: x.get("mtime", 0), reverse=True)
+        return jsonify({"code": 0, "msg": "ok", "audio_files": audio_files})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": str(e), "audio_files": []})
+
+
+@app.route('/delete_wav', methods=['POST'])
+def delete_wav():
+    """删除单个 wav 文件。只允许删除 static/wavs 下的文件。"""
+    filename = request.form.get("filename", "").strip()
+    if not filename and request.is_json:
+        data = request.get_json(silent=True) or {}
+        filename = str(data.get("filename", "")).strip()
+
+    if not filename:
+        return jsonify({"code": 1, "msg": "filename is required"})
+
+    # 简单防御目录穿越
+    if '/' in filename or '\\' in filename:
+        return jsonify({"code": 1, "msg": "invalid filename"})
+
+    file_path = os.path.join(WAVS_DIR, filename)
+    if not os.path.isfile(file_path):
+        return jsonify({"code": 1, "msg": "file not found"})
+
+    try:
+        os.remove(file_path)
+        return jsonify({"code": 0, "msg": "deleted"})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": str(e)})
 
 try:
     host = WEB_ADDRESS.split(":")

@@ -55,6 +55,20 @@
         <div class="col-12  my-2">
             <textarea id="text-input" class="form-control d-block" rows="3" placeholder="在此输入要转换的文本,以行为单位合成..."></textarea>
 			<span class="text-secondary fs-6">除文本框必填外，其他均为可选，若不懂无需填写</span>
+			<div class="d-flex flex-wrap align-items-center mt-2" id="tts-toolbar">
+				<span class="text-secondary font12 me-2">快捷插入控制符:</span>
+				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh]">[laugh]</button>
+				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[uv_break]">[uv_break]</button>
+				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[oral_2]">[oral_2]</button>
+				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh_0]">[laugh_0]</button>
+				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[break_6]">[break_6]</button>
+			</div>
+			<div class="d-flex flex-wrap align-items-center mt-1" id="tone-presets">
+				<span class="text-secondary font12 me-2">语气预设:</span>
+				<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_2][laugh_0][break_6]" data-toggle="tooltip" title="适合聊天、轻松语气">聊天</button>
+				<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_0][break_4]" data-toggle="tooltip" title="适合播音、正式语气">播音</button>
+				<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_3][laugh_1][break_3]" data-toggle="tooltip" title="适合夸张、情绪较强">夸张</button>
+			</div>
         </div>
 		<div class="col-12 my-2 ">
 			<div class="row align-items-center gx-1">
@@ -73,6 +87,10 @@
 				<div class="col align-items-center input-group">
 					<span class="input-group-text  rounded-0 px-1" id="">text seed</span>
 					<input id="text_seed" class="form-control  rounded-0 " value="42" type="number" min="0" >
+				</div>
+				<div class="col align-items-center input-group">
+					<span class="input-group-text  rounded-0 px-1" id="">分片长度</span>
+					<input id="segment_len" class="form-control  rounded-0 " value="0" type="number" min="0" data-toggle="tooltip" title="单段最大字符数，0=自动" >
 				</div>
 				<div class="col align-items-center input-group"> 
 						<span class="input-group-text" id="">Prompt</span>
@@ -161,6 +179,71 @@ $(document).ready(function() {
 
     let audioGenerated = false;
 
+	function insertToken($textarea, token) {
+		var el = $textarea.get(0);
+		if (!el) { return; }
+		var start = el.selectionStart || 0;
+		var end = el.selectionEnd || 0;
+		var value = el.value;
+		el.value = value.substring(0, start) + token + value.substring(end);
+		el.focus();
+		var newPos = start + token.length;
+		el.selectionStart = el.selectionEnd = newPos;
+	}
+
+	function appendAudioItem(audio, autoPlay, jsCode) {
+		let pos = audio.filename.lastIndexOf('/') + 1;
+		let filename = audio.filename.substr(pos);
+		let count = $('#audio-container > div.audio-item').length + 1;
+		let badge = '';
+		if (audio.is_merged === 1) {
+			badge = '<span class="badge bg-success ms-2">合并</span>';
+		} else if (audio.part_index) {
+			badge = '<span class="badge bg-secondary ms-2">分片 ' + audio.part_index + '</span>';
+		}
+		let durationText = (audio.audio_duration && audio.audio_duration > 0) ? ' | 音频时长: ' + audio.audio_duration + ' 秒' : '';
+		let autoplayAttr = autoPlay ? ' autoplay' : '';
+		jsCode = jsCode || '';
+		$('#audio-container').prepend(
+			`
+			  <div class="col-12 mb-2 pb-2 border-bottom audio-item" data-filename="${filename}">
+				<div>					
+					[${count}] ${filename} ${badge}
+				</div>
+				<div class="d-flex align-items-center my-1">
+					<a title="移除显示，不删除wav文件" href="javascripts:;" onclick="$(this).parent().parent().remove()" class="btn btn-close font12 me-2"></a>
+					<audio controls${autoplayAttr} src="${audio.url}"></audio>
+					<a href="${audio.url}" download="${filename}" class="btn btn-success ms-2">下载音频</a>
+					<button type="button" class="btn btn-outline-danger ms-2 delete-wav-btn">删除文件</button>
+				</div>
+				<div class="d-flex align-items-center text-secondary fs-6">
+					<button class="btn btn-info text-light me-2 show-js-btn" data-js-code="${encodeURIComponent(jsCode)}">显示API调用</button>
+					<span>
+					推理时长: ${audio.inference_time} 秒${durationText}
+					</span>
+				</div>
+				<div class="m-2 bg-black text-white d-none code-container p-1"></div>
+			  </div>
+			`);
+	}
+
+	function loadAudioList() {
+		$.ajax({
+			url: '/list_wavs',
+			type: 'GET',
+			success: function(response) {
+				if (response.code === 0 && response.audio_files) {
+					$('#audio-container').empty();
+					response.audio_files.forEach(function(audio) {
+						appendAudioItem(audio, false, '');
+					});
+				}
+			}
+		});
+	}
+
+	loadAudioList();
+
   $('#temper_wrap input[type="range"]').on('input',function(){
 	$(this).next().text(($(this).val()));
   });
@@ -188,13 +271,15 @@ $(document).ready(function() {
 				speed:parseInt($('#speed').val()),
 				temperature:parseFloat($('#temperature').val()),
 				top_p:parseFloat($('#top_p').val()),
-				top_k:parseFloat($('#top_k').val()),
+				top_k:parseInt($('#top_k').val()),
 				refine_max_new_token:parseInt($('#refine_max_new_token').val()),
 				infer_max_new_token:parseInt($('#infer_max_new_token').val()),
-				text_seed:parseInt($(text_seed).val()),
+				text_seed:parseInt($('#text_seed').val()),
 				skip_refine:$('#skip_refine').prop('checked')?1:0,
 				is_stream:0,
-				custom_voice:custom_voice?parseInt(custom_voice):0
+				custom_voice:custom_voice?parseInt(custom_voice):0,
+				segment_len:parseInt($('#segment_len').val() || 0),
+				split:1
 			};
 
       $.ajax({
@@ -207,9 +292,7 @@ $(document).ready(function() {
             console.log(response);
             if (response.audio_files) {
               response.audio_files.forEach(function(audio, index) {
-                let pos = audio.filename.lastIndexOf('/') + 1;
-                let filename = audio.filename.substr(pos);
-                let jsCode = `# API调用代码
+				let jsCode = `# API调用代码
 
 import requests
 
@@ -222,27 +305,7 @@ print(res.json())
 #error
 {code:1, msg:"error"}
 `;
-				let n=$('#audio-container > div').length+1;
-                $('#audio-container').prepend(
-				`
-                  <div class="col-12 mb-2 pb-2 border-bottom">
-                    <div>						
-						[${n}] ${filename} 
-					</div>
-					<div class="d-flex align-items-center my-1">
-						<a title="移除显示，不删除wav文件" href="javascripts:;" onclick="$(this).parent().parent().remove()" class="btn btn-close font12 me-2"></a>
-						<audio controls autoplay src="${audio.url}"></audio>
-                                                <a href="${audio.url}" download="${filename}" class="btn btn-success ms-2">下载音频</a>
-					</div>
-                    <div class="d-flex align-items-center text-secondary fs-6">
-						<button class="btn btn-info text-light me-2 show-js-btn" data-js-code="${encodeURIComponent(jsCode)}">显示API调用</button>
-						<span>
-						推理时长: ${audio.inference_time} 秒
-						</span>
-					</div>
-                    <div class="m-2 bg-black text-white d-none code-container p-1"></div>
-                  </div>
-                `);
+				appendAudioItem(audio, true, jsCode);
               });
 
               audioGenerated = true;
@@ -271,6 +334,17 @@ print(res.json())
     }
   });
 
+	$(document).on('click', '.tts-token-btn', function() {
+		var token = $(this).data('token');
+		insertToken($('#text-input'), token);
+	});
+
+	$(document).on('click', '.tone-preset-btn', function() {
+		var preset = $(this).data('prompt');
+		if (preset) {
+			$('#prompt').val(preset);
+		}
+	});
 
 	$('#upload-btn').click(function() {
         $('#file-input').click()
