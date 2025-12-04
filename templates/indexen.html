@@ -69,6 +69,20 @@
 		<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_0][break_4]" data-toggle="tooltip" title="Formal broadcast tone">Broadcast</button>
 		<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_3][laugh_1][break_3]" data-toggle="tooltip" title="Exaggerated, emotional tone">Exaggerated</button>
 	</div>
+    <div class="d-flex flex-wrap align-items-center mt-2" id="tts-toolbar">
+        <span class="text-secondary font12 me-2">Quick tokens:</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh]">[laugh]</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[uv_break]">[uv_break]</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[oral_2]">[oral_2]</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh_0]">[laugh_0]</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[break_6]">[break_6]</button>
+    </div>
+	<div class="d-flex flex-wrap align-items-center mt-1" id="tone-presets">
+		<span class="text-secondary font12 me-2">Tone presets:</span>
+		<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_2][laugh_0][break_6]" data-toggle="tooltip" title="Casual chatting tone">Chat</button>
+		<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_0][break_4]" data-toggle="tooltip" title="Formal broadcast tone">Broadcast</button>
+		<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_3][laugh_1][break_3]" data-toggle="tooltip" title="Exaggerated, emotional tone">Exaggerated</button>
+	</div>
 </div>
 <div class="col-12 my-2 ">
     <div class="row align-items-center gx-1">
@@ -91,10 +105,6 @@
         <div class="col align-items-center input-group">
             <span class="input-group-text  rounded-0 px-1" id="">Segment len</span>
             <input id="segment_len" class="form-control  rounded-0 " value="0" type="number" min="0" data-toggle="tooltip" title="Max characters per segment, 0=auto" >
-        </div>
-        <div class="col align-items-center input-group">
-            <span class="input-group-text  rounded-0 px-1" id="">Segment seconds</span>
-            <input id="segment_seconds" class="form-control  rounded-0 " value="0" type="number" min="0" step="1" data-toggle="tooltip" title="Target duration per segment in seconds, >0 overrides length" >
         </div>
         <div class="col align-items-center input-group"> 
             <span class="input-group-text" id="">Prompt</span>
@@ -186,22 +196,20 @@ $(document).ready(function() {
         el.selectionStart = el.selectionEnd = newPos;
     }
 
-    function appendAudioItem(audio, autoPlay, jsCode, $container) {
-		let pos = audio.filename.lastIndexOf('/') + 1;
-		let filename = audio.filename.substr(pos);
-		let count = $('#audio-container').find('div.audio-item').length + 1;
+    function appendAudioItem(audio, autoPlay, jsCode) {
+        let pos = audio.filename.lastIndexOf('/') + 1;
+        let filename = audio.filename.substr(pos);
+        let count = $('#audio-container > div.audio-item').length + 1;
         let badge = '';
         if (audio.is_merged === 1) {
             badge = '<span class="badge bg-success ms-2">Merged</span>';
         } else if (audio.part_index) {
             badge = '<span class="badge bg-secondary ms-2">Part ' + audio.part_index + '</span>';
         }
-        		let durationText = (audio.audio_duration && audio.audio_duration > 0) ? ' | duration: ' + audio.audio_duration + ' s' : '';
-		let autoplayAttr = autoPlay ? ' autoplay' : '';
-		jsCode = jsCode || '';
-		$container = $container || $('#audio-container');
-		let src = audio.relative_url || audio.url;
-		$container.prepend(
+        let durationText = (audio.audio_duration && audio.audio_duration > 0) ? ' | duration: ' + audio.audio_duration + ' s' : '';
+        let autoplayAttr = autoPlay ? ' autoplay' : '';
+        jsCode = jsCode || '';
+        $('#audio-container').prepend(
             `
               <div class="col-12 mb-2 pb-2 border-bottom audio-item" data-filename="${filename}">
                 <div>
@@ -209,8 +217,8 @@ $(document).ready(function() {
                 </div>
                 <div class="d-flex align-items-center my-1">
                     <a title="Remove display (keep wav file)" href="javascripts:;" onclick="$(this).parent().parent().remove()" class="btn btn-close font12 me-2"></a>
-                    <audio controls${autoplayAttr} src="${src}"></audio>
-                    <a href="${src}" download="${filename}" class="btn btn-success ms-2">Download</a>
+                    <audio controls${autoplayAttr} src="${audio.url}"></audio>
+                    <a href="${audio.url}" download="${filename}" class="btn btn-success ms-2">Download</a>
                     <button type="button" class="btn btn-outline-danger ms-2 delete-wav-btn">Delete file</button>
                 </div>
                 <div class="d-flex align-items-center text-secondary fs-6">
@@ -272,10 +280,10 @@ $(document).ready(function() {
 				refine_max_new_token:parseInt($('#refine_max_new_token').val()),
 				infer_max_new_token:parseInt($('#infer_max_new_token').val()),
 				text_seed:parseInt($('#text_seed').val()),
+				text_seed:parseInt($('#text_seed').val()),
 				skip_refine:$('#skip_refine').prop('checked')?1:0,
 				custom_voice:custom_voice?parseInt(custom_voice):0,
 				segment_len:parseInt($('#segment_len').val() || 0),
-				segment_seconds:parseFloat($('#segment_seconds').val() || 0),
 				split:1
 			};
       $.ajax({
@@ -287,7 +295,23 @@ $(document).ready(function() {
           if (response.code === 0) {
             console.log(response);
             if (response.audio_files) {
-              appendAudioBatch(response.audio_files, data);
+              response.audio_files.forEach(function(audio, index) {
+                let jsCode = `# API Call Code
+
+import requests
+
+res = requests.post('http://${location.host}/tts', data=${JSON.stringify(data, null, 2)})
+print(res.json())
+
+#ok
+{code:0, msg:'ok', audio_files:[{filename: ${audio.filename}, url: ${audio.url}}]}
+
+#error
+{code:1, msg:"error"}
+`;
+				appendAudioItem(audio, true, jsCode);
+              });
+
               audioGenerated = true;
             } else {
               layer.alert('Audio file generation failure', {title: false});
@@ -386,42 +410,6 @@ $(document).ready(function() {
 				layer.alert('Deleted successfully', {title: false});
 			  } else {
 				layer.alert('Delete failed: ' + response.msg, {title: false});
-			  }
-			},
-			error: function(xhr, status, error) {
-			  layer.alert('Error: ' + error, {title: false});
-			}
-		  });
-		});
-	});
-
-	$(document).on('click', '.delete-batch-btn', function() {
-		var $batch = $(this).closest('.audio-batch');
-		var filenames = [];
-		$batch.find('.audio-item').each(function() {
-			var name = $(this).data('filename');
-			if (name) {
-				filenames.push(name);
-			}
-		});
-		if (filenames.length === 0) {
-			$batch.remove();
-			return;
-		}
-		layer.confirm('Delete all audio files in this batch?', {
-		  btn: ['Yes', 'No'],
-		  title:false
-		}, function() {
-		  $.ajax({
-			url: '/delete_wavs_batch',
-			type: 'POST',
-			data: { filenames: filenames.join(',') },
-			success: function(response) {
-			  if (response.code === 0) {
-				$batch.remove();
-				layer.alert('Batch deleted successfully', {title: false});
-			  } else {
-				layer.alert('Batch delete failed: ' + response.msg, {title: false});
 			  }
 			},
 			error: function(xhr, status, error) {

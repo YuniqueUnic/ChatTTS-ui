@@ -171,8 +171,6 @@ def tts():
         "skip_refine": 0,
         "speed": 5,
         "text_seed": 42,
-        "speed": 5,
-        "text_seed": 42,
         "refine_max_new_token": 384,
         "infer_max_new_token": 2048,
         "wav": 0,
@@ -181,8 +179,6 @@ def tts():
         "split": 0,
         # 文本分片长度，0=自动（保持默认行为）
         "segment_len": 0,
-        # 目标分片时长（秒），0=不按时长，仅按字符数
-        "segment_seconds": 0.0,
     }
 
     # 获取
@@ -208,48 +204,194 @@ def tts():
     wav = utils.get_parameter(request, "wav", defaults["wav"], int)
     split_mode = utils.get_parameter(request, "split", defaults["split"], int)
     segment_len = utils.get_parameter(request, "segment_len", defaults["segment_len"], int)
-    segment_seconds = utils.get_parameter(request, "segment_seconds", defaults["segment_seconds"], float)
         
         
     
-    # 如果指定了分片目标时长，则将其近似映射为字符长度
-    if segment_seconds and segment_seconds > 0:
-        # 简单近似：每秒约 12 个字符，可根据需要在 .env 中调整为环境变量
-        approx_chars_per_second = 12
-        try:
-            approx_chars_per_second = int(os.getenv('CHARS_PER_SECOND', approx_chars_per_second))
-        except Exception:
-            pass
-        segment_len = max(1, int(segment_seconds * approx_chars_per_second))
-
-    app.logger.info(f"[tts]{text=}\n{voice=},{skip_refine=}, {segment_len=}, {segment_seconds=}\n")
+    app.logger.info(f"[tts]{text=}\n{voice=},{skip_refine=}\n")
     if not text:
         return jsonify({"code": 1, "msg": "text params lost"})
+    # 固定音色
+    rand_spk=None
+    # voice可能是 {voice}.csv or {voice}.pt or number
+    voice=voice.replace('.csv','.pt')
+    seed_path=f'{SPEAKER_DIR}/{voice}'
+    print(f'{voice=}')
+    #if voice.endswith('.csv') and os.path.exists(seed_path):
+    #    rand_spk=utils.load_speaker(voice)
+    #    print(f'当前使用音色 {seed_path=}')
+    #el
+    
+    if voice.endswith('.pt') and os.path.exists(seed_path):
+        #如果.env中未指定设备，则使用 ChatTTS相同算法找设备，否则使用指定设备
+        rand_spk=torch.load(seed_path, map_location=device)
+        print(f'当前使用音色 {seed_path=}')
+    # 否则 判断是否存在 {voice}.csv
+    #elif os.path.exists(f'{SPEAKER_DIR}/{voice}.csv'):
+    #    rand_spk=utils.load_speaker(voice)
+    #    print(f'当前使用音色 {SPEAKER_DIR}/{voice}.csv')
+    
+    if rand_spk is None:    
+        print(f'当前使用音色：根据seed={voice}获取随机音色')
+        voice_int=re.findall(r'^(\d+)',voice)
+        if len(voice_int)>0:
+            voice=int(voice_int[0])
+        else:
+            voice=2222
+        torch.manual_seed(voice)
+        #std, mean = chat.sample_random_speaker
+        rand_spk = chat.sample_random_speaker()
+        #rand_spk = torch.randn(768) * std + mean
+        # 保存音色
+        torch.save(rand_spk,f"{SPEAKER_DIR}/{voice}.pt")
+        #utils.save_speaker(voice,rand_spk)
+        
 
+    audio_files = []
+    
+
+    start_time = time.time()
+    
+    # 中英按语言分行
+    text_list=[t.strip() for t in text.split("\n") if t.strip()]
+    new_text=utils.split_text(text_list, segment_len if segment_len>0 else None)
+    if text_seed>0:
+        torch.manual_seed(text_seed)
+    
+    
+    params_infer_code = ChatTTS.Chat.InferCodeParams(
+        spk_emb=rand_spk,
+        prompt=f"[speed_{speed}]",
+        top_P=top_p,
+        top_K=top_k,
+        temperature=temperature,
+        max_new_token=infer_max_new_token
+    )
+    params_refine_text = ChatTTS.Chat.RefineTextParams(
+        prompt=prompt,
+        top_P=top_p,
+        top_K=top_k,
+        temperature=temperature,
+        max_new_token=refine_max_new_token
+    )
+    print(f'{prompt=}')
+    # 将少于30个字符的行同其他行拼接
+    retext=[]
+    short_text=""
+    for it in new_text:
+        if len(it)<30:
+            short_text+=f"{it} [uv_break] "
+            if len(short_text)>30:
+                retext.append(short_text)
+                short_text=""
+        else:
+            retext.append(short_text+it)
+            short_text=""
+    if len(short_text)>30 or len(retext)<1:
+        retext.append(short_text)
+    elif short_text:
+        retext[-1]+=f" [uv_break] {short_text}"
+        
+    new_text=retext
+    
+    new_text_list=[new_text[i:i+merge_size] for i in range(0,len(new_text),merge_size)]
+    filename_list=[]
+
+    audio_time=0
+    inter_time=0
+
+    for i,te in enumerate(new_text_list):
+        print(f'{te=}')
+        wavs = chat.infer(
+            te, 
+            #use_decoder=False,
+            stream=True if is_stream==1 else False,
+            skip_refine_text=skip_refine,
+            do_text_normalization=False,
+            do_homophone_replacement=True,
+            params_refine_text=params_refine_text,
+            params_infer_code=params_infer_code
+            
+            )
+
+
+        end_time = time.time()
+        inference_time = end_time - start_time
+        inference_time_rounded = round(inference_time, 2)
+        inter_time+=inference_time_rounded
+        print(f"推理时长: {inference_time_rounded} 秒")
+
+       
+        
+        for j,w in enumerate(wavs):
+            filename = datetime.datetime.now().strftime('%H%M%S_')+f"use{inference_time_rounded}s-seed{voice}-te{temperature}-tp{top_p}-tk{top_k}-textlen{len(text)}-{str(random())[2:7]}" + f"-{i}-{j}.wav"
+            filename_list.append(filename)
+            torchaudio.save(WAVS_DIR+'/'+filename, torch.from_numpy(w).unsqueeze(0), 24000)
+        
+    txt_tmp="\n".join([f"file '{WAVS_DIR}/{it}'" for it in filename_list])
+    txt_name=f'{time.time()}.txt'
+    with open(f'{WAVS_DIR}/{txt_name}','w',encoding='utf-8') as f:
+        f.write(txt_tmp)
+    outname=datetime.datetime.now().strftime('%H%M%S_')+f"use{inter_time}s-audio{audio_time}s-seed{voice}-te{temperature}-tp{top_p}-tk{top_k}-textlen{len(text)}-{str(random())[2:7]}" + "-merge.wav"
     try:
-        audio_files = run_tts_generation(
-            chat=chat,
-            text=text,
-            prompt=prompt,
-            voice=voice,
-            custom_voice=custom_voice,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            skip_refine=skip_refine,
-            is_stream=is_stream,
-            speed=speed,
-            text_seed=text_seed,
-            refine_max_new_token=refine_max_new_token,
-            infer_max_new_token=infer_max_new_token,
-            split_mode=split_mode,
-            segment_len=segment_len,
-            merge_size=merge_size,
-            device=device,
-        )
-    except RuntimeError as e:
-        return jsonify({"code": 1, "msg": str(e)})
+        subprocess.run(["ffmpeg","-hide_banner", "-ignore_unknown","-y","-f","concat","-safe","0","-i",f'{WAVS_DIR}/{txt_name}',"-c:a","copy",WAVS_DIR + '/' + outname],
+                   stdout=subprocess.PIPE,
+                   stderr=subprocess.PIPE,
+                   encoding="utf-8",
+                   check=True,
+                   text=True,
+                   creationflags=0 if sys.platform != 'win32' else subprocess.CREATE_NO_WINDOW)
+    except Exception as e:
+        return jsonify({"code":1,"msg":str(e)})
 
+    
+
+    audio_path = WAVS_DIR + '/' + outname
+    try:
+        #  使用 soundfile 计算合并音频时长
+        audio_info = sf.info(audio_path)
+        audio_duration = round(audio_info.duration, 2)
+    except Exception as e:
+        print(f"计算音频时长失败: {e}")
+        audio_duration = -1
+
+    # 根据 split_mode 决定返回内容
+    audio_files.clear()
+    if split_mode == 1:
+        # 返回所有分片音频
+        for idx, fname in enumerate(filename_list):
+            part_path = WAVS_DIR + '/' + fname
+            part_duration = -1
+            try:
+                part_info = sf.info(part_path)
+                part_duration = round(part_info.duration, 2)
+            except Exception as e:
+                print(f"计算分片音频时长失败: {part_path}, {e}")
+
+            audio_files.append({
+                "filename": part_path,
+                "url": f"/static/wavs/{fname}",
+                "inference_time": round(inter_time, 2),
+                "audio_duration": part_duration,
+                "part_index": idx + 1,
+                "is_merged": 0,
+            })
+
+        # 追加合并后的完整音频
+        audio_files.append({
+            "filename": audio_path,
+            "url": f"/static/wavs/{outname}",
+            "inference_time": round(inter_time, 2),
+            "audio_duration": audio_duration,
+            "is_merged": 1,
+        })
+    else:
+        # 默认保持原行为：仅返回合并后的完整音频
+        audio_files.append({
+            "filename": audio_path,
+            "url": f"/static/wavs/{outname}",
+            "inference_time": round(inter_time, 2),
+            "audio_duration": audio_duration,
+        })
     result_dict={"code": 0, "msg": "ok", "audio_files": audio_files}
     try:
         if torch.cuda.is_available():
@@ -260,7 +402,18 @@ def tts():
     if len(audio_files) == 1:
         result_dict["filename"] = audio_files[0]['filename']
         result_dict["url"] = audio_files[0]['url']
+    if len(audio_files) == 1:
+        result_dict["filename"] = audio_files[0]['filename']
+        result_dict["url"] = audio_files[0]['url']
 
+    # 如果请求直接返回 wav 文件，则优先返回合并后的音频（如存在）
+    if wav > 0:
+        target = audio_files[0]
+        for it in audio_files:
+            if isinstance(it, dict) and it.get("is_merged") == 1:
+                target = it
+                break
+        return send_file(target['filename'], mimetype='audio/x-wav')
     # 如果请求直接返回 wav 文件，则优先返回合并后的音频（如存在）
     if wav > 0:
         target = audio_files[0]
@@ -286,8 +439,35 @@ def clear_wavs():
 @app.route('/list_wavs', methods=['GET'])
 def list_wavs():
     """列出当前 static/wavs 下的所有 wav 文件。"""
+    audio_files = []
     try:
-        audio_files = list_audio_files()
+        if not os.path.exists(WAVS_DIR):
+            return jsonify({"code": 0, "msg": "ok", "audio_files": audio_files})
+
+        for name in os.listdir(WAVS_DIR):
+            if not name.lower().endswith('.wav'):
+                continue
+            full_path = os.path.join(WAVS_DIR, name)
+            if not os.path.isfile(full_path):
+                continue
+
+            duration = -1
+            try:
+                info = sf.info(full_path)
+                duration = round(info.duration, 2)
+            except Exception as e:
+                print(f"计算音频时长失败: {full_path}, {e}")
+
+            stat = os.stat(full_path)
+            audio_files.append({
+                "filename": full_path,
+                "url": f"/static/wavs/{name}",
+                "inference_time": 0,
+                "audio_duration": duration,
+                "mtime": int(stat.st_mtime),
+            })
+
+        audio_files.sort(key=lambda x: x.get("mtime", 0), reverse=True)
         return jsonify({"code": 0, "msg": "ok", "audio_files": audio_files})
     except Exception as e:
         return jsonify({"code": 1, "msg": str(e), "audio_files": []})
@@ -301,65 +481,27 @@ def delete_wav():
         data = request.get_json(silent=True) or {}
         filename = str(data.get("filename", "")).strip()
 
+    if not filename:
+        return jsonify({"code": 1, "msg": "filename is required"})
+
+    # 简单防御目录穿越
+    if '/' in filename or '\\' in filename:
+        return jsonify({"code": 1, "msg": "invalid filename"})
+
+    file_path = os.path.join(WAVS_DIR, filename)
+    if not os.path.isfile(file_path):
+        return jsonify({"code": 1, "msg": "file not found"})
+
     try:
-        delete_audio_file(filename)
+        os.remove(file_path)
         return jsonify({"code": 0, "msg": "deleted"})
-    except (ValueError, FileNotFoundError) as e:
-        # 与原有返回保持一致：code=1, msg 为错误原因
-        return jsonify({"code": 1, "msg": str(e)})
     except Exception as e:
         return jsonify({"code": 1, "msg": str(e)})
 
-
-@app.route('/delete_wavs_batch', methods=['POST'])
-def delete_wavs_batch():
-    """Delete multiple wav files in one request.
-
-    Expects either:
-    - form field 'filenames' as comma/newline separated string, or
-    - JSON body {"filenames": ["file1.wav", "file2.wav", ...]}
-    """
-
-    filenames = []
-
-    raw = request.form.get("filenames", "").strip()
-    if raw:
-        for name in re.split(r"[\n,]", raw):
-            name = name.strip()
-            if name:
-                filenames.append(name)
-    elif request.is_json:
-        data = request.get_json(silent=True) or {}
-        arr = data.get("filenames", [])
-        if isinstance(arr, list):
-            for name in arr:
-                name = str(name or "").strip()
-                if name:
-                    filenames.append(name)
-
-    if not filenames:
-        return jsonify({"code": 1, "msg": "filenames is required"})
-
-    errors = []
-    deleted = 0
-    for name in filenames:
-        try:
-            delete_audio_file(name)
-            deleted += 1
-        except (ValueError, FileNotFoundError) as e:
-            errors.append(f"{name}: {e}")
-        except Exception as e:
-            errors.append(f"{name}: {e}")
-
-    if errors:
-        return jsonify({"code": 1, "msg": "; ".join(errors), "deleted": deleted})
-
-    return jsonify({"code": 0, "msg": "deleted", "deleted": deleted})
-
 try:
-    host = WEB_ADDRESS.split(":")
-    print(f"Start:{WEB_ADDRESS}")
-    threading.Thread(target=utils.openweb, args=(f"http://{WEB_ADDRESS}",)).start()
-    serve(app, host=host[0], port=int(host[1]))
+    host = WEB_ADDRESS.split(':')
+    print(f'Start:{WEB_ADDRESS}')
+    threading.Thread(target=utils.openweb,args=(f'http://{WEB_ADDRESS}',)).start()
+    serve(app,host=host[0], port=int(host[1]))
 except Exception as e:
     print(e)
