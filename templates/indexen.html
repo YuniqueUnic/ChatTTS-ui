@@ -55,6 +55,20 @@
 <div class="col-12  my-2">
     <textarea id="text-input" class="form-control d-block" rows="3" placeholder="Enter the text to be converted here, synthesize by line..."></textarea>
     <span class="text-secondary fs-6">Besides the textbox being required, all others are optional. If you do not understand, no need to fill out.</span>
+    <div class="d-flex flex-wrap align-items-center mt-2" id="tts-toolbar">
+        <span class="text-secondary font12 me-2">Quick tokens:</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh]">[laugh]</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[uv_break]">[uv_break]</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[oral_2]">[oral_2]</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh_0]">[laugh_0]</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[break_6]">[break_6]</button>
+    </div>
+	<div class="d-flex flex-wrap align-items-center mt-1" id="tone-presets">
+		<span class="text-secondary font12 me-2">Tone presets:</span>
+		<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_2][laugh_0][break_6]" data-toggle="tooltip" title="Casual chatting tone">Chat</button>
+		<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_0][break_4]" data-toggle="tooltip" title="Formal broadcast tone">Broadcast</button>
+		<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_3][laugh_1][break_3]" data-toggle="tooltip" title="Exaggerated, emotional tone">Exaggerated</button>
+	</div>
 </div>
 <div class="col-12 my-2 ">
     <div class="row align-items-center gx-1">
@@ -73,6 +87,10 @@
         <div class="col align-items-center input-group">
             <span class="input-group-text  rounded-0 px-1" id="">text seed</span>
             <input id="text_seed" class="form-control  rounded-0 " value="42" type="number" min="0" >
+        </div>
+        <div class="col align-items-center input-group">
+            <span class="input-group-text  rounded-0 px-1" id="">Segment len</span>
+            <input id="segment_len" class="form-control  rounded-0 " value="0" type="number" min="0" data-toggle="tooltip" title="Max characters per segment, 0=auto" >
         </div>
         <div class="col align-items-center input-group"> 
             <span class="input-group-text" id="">Prompt</span>
@@ -152,6 +170,71 @@ $(document).ready(function() {
 
     let audioGenerated = false;
 
+    function insertToken($textarea, token) {
+        var el = $textarea.get(0);
+        if (!el) { return; }
+        var start = el.selectionStart || 0;
+        var end = el.selectionEnd || 0;
+        var value = el.value;
+        el.value = value.substring(0, start) + token + value.substring(end);
+        el.focus();
+        var newPos = start + token.length;
+        el.selectionStart = el.selectionEnd = newPos;
+    }
+
+    function appendAudioItem(audio, autoPlay, jsCode) {
+        let pos = audio.filename.lastIndexOf('/') + 1;
+        let filename = audio.filename.substr(pos);
+        let count = $('#audio-container > div.audio-item').length + 1;
+        let badge = '';
+        if (audio.is_merged === 1) {
+            badge = '<span class="badge bg-success ms-2">Merged</span>';
+        } else if (audio.part_index) {
+            badge = '<span class="badge bg-secondary ms-2">Part ' + audio.part_index + '</span>';
+        }
+        let durationText = (audio.audio_duration && audio.audio_duration > 0) ? ' | duration: ' + audio.audio_duration + ' s' : '';
+        let autoplayAttr = autoPlay ? ' autoplay' : '';
+        jsCode = jsCode || '';
+        $('#audio-container').prepend(
+            `
+              <div class="col-12 mb-2 pb-2 border-bottom audio-item" data-filename="${filename}">
+                <div>
+                    [${count}] ${filename} ${badge}
+                </div>
+                <div class="d-flex align-items-center my-1">
+                    <a title="Remove display (keep wav file)" href="javascripts:;" onclick="$(this).parent().parent().remove()" class="btn btn-close font12 me-2"></a>
+                    <audio controls${autoplayAttr} src="${audio.url}"></audio>
+                    <a href="${audio.url}" download="${filename}" class="btn btn-success ms-2">Download</a>
+                    <button type="button" class="btn btn-outline-danger ms-2 delete-wav-btn">Delete file</button>
+                </div>
+                <div class="d-flex align-items-center text-secondary fs-6">
+                    <button class="btn btn-info text-light me-2 show-js-btn" data-js-code="${encodeURIComponent(jsCode)}">Show API Calls</button>
+                    <span>
+                    inference time: ${audio.inference_time}s${durationText}
+                    </span>
+                </div>
+                <div class="m-2 bg-black text-white d-none code-container p-1"></div>
+              </div>
+            `);
+    }
+
+    function loadAudioList() {
+        $.ajax({
+            url: '/list_wavs',
+            type: 'GET',
+            success: function(response) {
+                if (response.code === 0 && response.audio_files) {
+                    $('#audio-container').empty();
+                    response.audio_files.forEach(function(audio) {
+                        appendAudioItem(audio, false, '');
+                    });
+                }
+            }
+        });
+    }
+
+    loadAudioList();
+
   $('#temper_wrap input[type="range"]').on('input',function(){
 	$(this).next().text(($(this).val()));
   });
@@ -182,9 +265,11 @@ $(document).ready(function() {
 				top_k:parseFloat($('#top_k').val()),
 				refine_max_new_token:parseInt($('#refine_max_new_token').val()),
 				infer_max_new_token:parseInt($('#infer_max_new_token').val()),
-				text_seed:parseInt($(text_seed).val()),
+				text_seed:parseInt($('#text_seed').val()),
 				skip_refine:$('#skip_refine').prop('checked')?1:0,
-				custom_voice:custom_voice?parseInt(custom_voice):0
+				custom_voice:custom_voice?parseInt(custom_voice):0,
+				segment_len:parseInt($('#segment_len').val() || 0),
+				split:1
 			};
       $.ajax({
         url: '/tts',
@@ -196,8 +281,6 @@ $(document).ready(function() {
             console.log(response);
             if (response.audio_files) {
               response.audio_files.forEach(function(audio, index) {
-                let pos = audio.filename.lastIndexOf('/') + 1;
-                let filename = audio.filename.substr(pos);
                 let jsCode = `# API Call Code
 
 import requests
@@ -211,25 +294,7 @@ print(res.json())
 #error
 {code:1, msg:"error"}
 `;
-				let n=$('#audio-container > div').length+1;
-                $('#audio-container').prepend(`
-                  <div class="col-12 mb-2 pb-2 border-bottom">
-                    <div>						
-						[${n}] ${filename} 
-					</div>
-					<div class="d-flex align-items-center my-1">
-						<a title="Remove display wav files" href="javascripts:;" onclick="$(this).parent().parent().remove()" class="btn btn-close font12 me-2"></a>
-						<audio controls autoplay src="${audio.url}"></audio>
-					</div>
-                    <div class="d-flex align-items-center text-secondary fs-6">
-						<button class="btn btn-info text-light me-2 show-js-btn" data-js-code="${encodeURIComponent(jsCode)}">Show API Calls</button>
-						<span>
-						inference time: ${audio.inference_time}s
-						</span>
-					</div>
-                    <div class="m-2 bg-black text-white d-none code-container p-1"></div>
-                  </div>
-                `);
+				appendAudioItem(audio, true, jsCode);
               });
 
               audioGenerated = true;
@@ -298,7 +363,46 @@ print(res.json())
     });
   });
 
+  $(document).on('click', '.tts-token-btn', function() {
+		var token = $(this).data('token');
+		insertToken($('#text-input'), token);
+	});
 
+	$(document).on('click', '.tone-preset-btn', function() {
+		var preset = $(this).data('prompt');
+		if (preset) {
+			$('#prompt').val(preset);
+		}
+	});
+
+	$(document).on('click', '.delete-wav-btn', function() {
+		var $item = $(this).closest('.audio-item');
+		var filename = $item.data('filename');
+		if (!filename) {
+			return;
+		}
+		layer.confirm('Delete this audio file?', {
+		  btn: ['Yes', 'No'],
+		  title:false
+		}, function() {
+		  $.ajax({
+			url: '/delete_wav',
+			type: 'POST',
+			data: { filename: filename },
+			success: function(response) {
+			  if (response.code === 0) {
+				$item.remove();
+				layer.alert('Deleted successfully', {title: false});
+			  } else {
+				layer.alert('Delete failed: ' + response.msg, {title: false});
+			  }
+			},
+			error: function(xhr, status, error) {
+			  layer.alert('Error: ' + error, {title: false});
+			}
+		  });
+		});
+	});
 });
 </script>
 
