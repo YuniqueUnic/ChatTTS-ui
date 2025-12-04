@@ -148,11 +148,12 @@ def remove_brackets(text):
 
 
 # 中英文数字转换为文字，特殊符号处理
-def split_text(text_list):
-    
+def split_text(text_list, segment_len=None):
     tx = TextNormalizer()
     haserror=False
     result=[]
+    max_len = segment_len if isinstance(segment_len, int) and segment_len > 0 else 200
+    min_len = segment_len if isinstance(segment_len, int) and segment_len > 0 else 150
     for i,text in enumerate(text_list):
         text=remove_brackets(text)
         if get_lang(text)=='zh':
@@ -172,17 +173,15 @@ def split_text(text_list):
                 haserror=True
                 tmp=num2text(text)
 
-        if len(tmp)>200:
-            tmp_res=split_text_by_punctuation(tmp)
+        if len(tmp)>max_len:
+            tmp_res=split_text_by_punctuation(tmp, min_length=min_len)
             result=result+tmp_res
         else:
             result.append(tmp)
     return result
 
 # 切分长行 200 150
-def split_text_by_punctuation(text):
-    # 定义长度限制
-    min_length = 150
+def split_text_by_punctuation(text, min_length=150):
     punctuation_marks = "。？！，、；：”’》」』）】…—"
     english_punctuation = ".?!,:;)}…"
 
