@@ -179,6 +179,8 @@ def tts():
         "split": 0,
         # 文本分片长度，0=自动（保持默认行为）
         "segment_len": 0,
+        # 目标分片时长（秒），0=不按时长，仅按字符数
+        "segment_seconds": 0.0,
     }
 
     # 获取
@@ -204,10 +206,21 @@ def tts():
     wav = utils.get_parameter(request, "wav", defaults["wav"], int)
     split_mode = utils.get_parameter(request, "split", defaults["split"], int)
     segment_len = utils.get_parameter(request, "segment_len", defaults["segment_len"], int)
+    segment_seconds = utils.get_parameter(request, "segment_seconds", defaults["segment_seconds"], float)
         
         
     
-    app.logger.info(f"[tts]{text=}\n{voice=},{skip_refine=}\n")
+    # 如果指定了分片目标时长，则将其近似映射为字符长度
+    if segment_seconds and segment_seconds > 0:
+        # 简单近似：每秒约 12 个字符，可根据需要在 .env 中调整为环境变量
+        approx_chars_per_second = 12
+        try:
+            approx_chars_per_second = int(os.getenv('CHARS_PER_SECOND', approx_chars_per_second))
+        except Exception:
+            pass
+        segment_len = max(1, int(segment_seconds * approx_chars_per_second))
+
+    app.logger.info(f"[tts]{text=}\n{voice=},{skip_refine=}, {segment_len=}, {segment_seconds=}\n")
     if not text:
         return jsonify({"code": 1, "msg": "text params lost"})
 
@@ -305,6 +318,52 @@ def delete_wav():
         return jsonify({"code": 1, "msg": str(e)})
     except Exception as e:
         return jsonify({"code": 1, "msg": str(e)})
+
+
+@app.route('/delete_wavs_batch', methods=['POST'])
+def delete_wavs_batch():
+    """Delete multiple wav files in one request.
+
+    Expects either:
+    - form field 'filenames' as comma/newline separated string, or
+    - JSON body {"filenames": ["file1.wav", "file2.wav", ...]}
+    """
+
+    filenames = []
+
+    raw = request.form.get("filenames", "").strip()
+    if raw:
+        for name in re.split(r"[\n,]", raw):
+            name = name.strip()
+            if name:
+                filenames.append(name)
+    elif request.is_json:
+        data = request.get_json(silent=True) or {}
+        arr = data.get("filenames", [])
+        if isinstance(arr, list):
+            for name in arr:
+                name = str(name or "").strip()
+                if name:
+                    filenames.append(name)
+
+    if not filenames:
+        return jsonify({"code": 1, "msg": "filenames is required"})
+
+    errors = []
+    deleted = 0
+    for name in filenames:
+        try:
+            delete_audio_file(name)
+            deleted += 1
+        except (ValueError, FileNotFoundError) as e:
+            errors.append(f"{name}: {e}")
+        except Exception as e:
+            errors.append(f"{name}: {e}")
+
+    if errors:
+        return jsonify({"code": 1, "msg": "; ".join(errors), "deleted": deleted})
+
+    return jsonify({"code": 0, "msg": "deleted", "deleted": deleted})
 
 try:
     host = WEB_ADDRESS.split(':')
