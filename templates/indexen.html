@@ -92,6 +92,10 @@
             <span class="input-group-text  rounded-0 px-1" id="">Segment len</span>
             <input id="segment_len" class="form-control  rounded-0 " value="0" type="number" min="0" data-toggle="tooltip" title="Max characters per segment, 0=auto" >
         </div>
+        <div class="col align-items-center input-group">
+            <span class="input-group-text  rounded-0 px-1" id="">Segment seconds</span>
+            <input id="segment_seconds" class="form-control  rounded-0 " value="0" type="number" min="0" step="1" data-toggle="tooltip" title="Target duration per segment in seconds, >0 overrides length" >
+        </div>
         <div class="col align-items-center input-group"> 
             <span class="input-group-text" id="">Prompt</span>
             <input id="prompt" class="form-control" value="[break_6]" data-toggle="tooltip" title="Fill in the prompt, such as [oral_2][laugh_0][break_6]" placeholder="For example [oral_2][laugh_0][break_6]" />
@@ -182,20 +186,21 @@ $(document).ready(function() {
         el.selectionStart = el.selectionEnd = newPos;
     }
 
-    function appendAudioItem(audio, autoPlay, jsCode) {
-        let pos = audio.filename.lastIndexOf('/') + 1;
-        let filename = audio.filename.substr(pos);
-        let count = $('#audio-container > div.audio-item').length + 1;
+    function appendAudioItem(audio, autoPlay, jsCode, $container) {
+		let pos = audio.filename.lastIndexOf('/') + 1;
+		let filename = audio.filename.substr(pos);
+		let count = $('#audio-container').find('div.audio-item').length + 1;
         let badge = '';
         if (audio.is_merged === 1) {
             badge = '<span class="badge bg-success ms-2">Merged</span>';
         } else if (audio.part_index) {
             badge = '<span class="badge bg-secondary ms-2">Part ' + audio.part_index + '</span>';
         }
-        let durationText = (audio.audio_duration && audio.audio_duration > 0) ? ' | duration: ' + audio.audio_duration + ' s' : '';
-        let autoplayAttr = autoPlay ? ' autoplay' : '';
-        jsCode = jsCode || '';
-        $('#audio-container').prepend(
+        		let durationText = (audio.audio_duration && audio.audio_duration > 0) ? ' | duration: ' + audio.audio_duration + ' s' : '';
+		let autoplayAttr = autoPlay ? ' autoplay' : '';
+		jsCode = jsCode || '';
+		$container = $container || $('#audio-container');
+		$container.prepend(
             `
               <div class="col-12 mb-2 pb-2 border-bottom audio-item" data-filename="${filename}">
                 <div>
@@ -269,6 +274,7 @@ $(document).ready(function() {
 				skip_refine:$('#skip_refine').prop('checked')?1:0,
 				custom_voice:custom_voice?parseInt(custom_voice):0,
 				segment_len:parseInt($('#segment_len').val() || 0),
+				segment_seconds:parseFloat($('#segment_seconds').val() || 0),
 				split:1
 			};
       $.ajax({
@@ -280,23 +286,7 @@ $(document).ready(function() {
           if (response.code === 0) {
             console.log(response);
             if (response.audio_files) {
-              response.audio_files.forEach(function(audio, index) {
-                let jsCode = `# API Call Code
-
-import requests
-
-res = requests.post('http://${location.host}/tts', data=${JSON.stringify(data, null, 2)})
-print(res.json())
-
-#ok
-{code:0, msg:'ok', audio_files:[{filename: ${audio.filename}, url: ${audio.url}}]}
-
-#error
-{code:1, msg:"error"}
-`;
-				appendAudioItem(audio, true, jsCode);
-              });
-
+              appendAudioBatch(response.audio_files, data);
               audioGenerated = true;
             } else {
               layer.alert('Audio file generation failure', {title: false});
@@ -395,6 +385,42 @@ print(res.json())
 				layer.alert('Deleted successfully', {title: false});
 			  } else {
 				layer.alert('Delete failed: ' + response.msg, {title: false});
+			  }
+			},
+			error: function(xhr, status, error) {
+			  layer.alert('Error: ' + error, {title: false});
+			}
+		  });
+		});
+	});
+
+	$(document).on('click', '.delete-batch-btn', function() {
+		var $batch = $(this).closest('.audio-batch');
+		var filenames = [];
+		$batch.find('.audio-item').each(function() {
+			var name = $(this).data('filename');
+			if (name) {
+				filenames.push(name);
+			}
+		});
+		if (filenames.length === 0) {
+			$batch.remove();
+			return;
+		}
+		layer.confirm('Delete all audio files in this batch?', {
+		  btn: ['Yes', 'No'],
+		  title:false
+		}, function() {
+		  $.ajax({
+			url: '/delete_wavs_batch',
+			type: 'POST',
+			data: { filenames: filenames.join(',') },
+			success: function(response) {
+			  if (response.code === 0) {
+				$batch.remove();
+				layer.alert('Batch deleted successfully', {title: false});
+			  } else {
+				layer.alert('Batch delete failed: ' + response.msg, {title: false});
 			  }
 			},
 			error: function(xhr, status, error) {
