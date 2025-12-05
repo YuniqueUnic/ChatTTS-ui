@@ -6,12 +6,13 @@
     <title>ChatTTS WebUI & API - v{{version}}</title>
     <link href="/static/js/bootstrap.min.css" rel="stylesheet">
     <style>
-        /* === 全局重置 === */
         :root {
             --border-color: #000;
             --border-width: 3px;
             --shadow-offset: 5px;
             --bg-color: #e0e7ff;
+            --col-config: 260px;
+            --col-result: 320px;
         }
         
         body {
@@ -19,12 +20,11 @@
             font-family: 'Courier New', Courier, monospace;
             color: #000;
             height: 100vh;
-            overflow: hidden; /* 禁止 body 滚动 */
+            overflow: hidden;
             background-image: radial-gradient(#000 1px, transparent 1px);
             background-size: 20px 20px;
         }
 
-        /* === 布局核心 (CSS Grid) === */
         .app-container {
             padding: 15px 25px;
             height: 100vh;
@@ -34,11 +34,11 @@
 
         .header-bar {
             flex: 0 0 auto;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             background: #fff;
             border: var(--border-width) solid #000;
             box-shadow: 4px 4px 0 #000;
-            padding: 12px 20px;
+            padding: 10px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -46,41 +46,12 @@
 
         .main-grid {
             flex: 1;
-            display: grid;
-            /* 调整比例：左侧更紧凑，中间更宽敞，右侧适中 */
-            grid-template-columns: 280px 1fr 340px;
-            gap: 25px;
-            min-height: 0; /* 关键：允许子元素收缩 */
+            display: flex;
+            gap: 0;
+            min-height: 0;
         }
 
-        /* === 响应式布局 (Mobile) === */
-        @media (max-width: 1000px) {
-            body { overflow: auto; height: auto; }
-            .app-container { height: auto; display: block; padding: 10px; }
-            
-            .main-grid {
-                display: flex;
-                flex-direction: column;
-                gap: 30px;
-                height: auto;
-            }
-
-            /* 利用 Order 属性调整显示顺序 */
-            .config-col { order: 2; } /* Config 排第2 */
-            .main-col   { order: 1; } /* Editor 排第1 */
-            .result-col { order: 3; } /* Result 排第3 */
-
-            .panel-column {
-                height: auto !important;
-                max-height: none !important; /* 取消高度限制 */
-                overflow: visible !important;
-            }
-            
-            /* 手机上文本框定高 */
-            #text-input { min-height: 250px; }
-        }
-
-        /* === 面板样式 === */
+        /* Resizable columns */
         .panel-column {
             background: #fff;
             border: var(--border-width) solid #000;
@@ -89,42 +60,63 @@
             flex-direction: column;
             height: 100%;
             overflow: hidden;
-            transition: transform 0.2s;
+            min-width: 200px;
+        }
+        .config-col { width: var(--col-config); flex-shrink: 0; }
+        .main-col { flex: 1; min-width: 300px; }
+        .result-col { width: var(--col-result); flex-shrink: 0; }
+
+        /* Splitter */
+        .splitter {
+            width: 8px;
+            background: linear-gradient(90deg, #ccc 1px, transparent 1px, transparent 3px, #ccc 3px);
+            cursor: col-resize;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+        .splitter:hover, .splitter.dragging { background: #ff90e8; }
+
+        /* Mobile */
+        @media (max-width: 1000px) {
+            body { overflow: auto; height: auto; }
+            .app-container { height: auto; display: block; padding: 10px; }
+            .main-grid { display: flex; flex-direction: column; gap: 20px; height: auto; }
+            .config-col, .main-col, .result-col { width: 100% !important; height: auto !important; }
+            .splitter { display: none; }
+            .panel-column { height: auto !important; max-height: none !important; overflow: visible !important; }
+            #text-input { min-height: 250px; }
         }
 
         .panel-header {
-            padding: 12px 18px;
+            padding: 10px 15px;
             border-bottom: var(--border-width) solid #000;
             font-weight: 900;
-            font-size: 1.1rem;
+            font-size: 1rem;
             text-transform: uppercase;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-shrink: 0;
-            letter-spacing: 1px;
         }
 
         .panel-body {
-            padding: 20px; /* 增加内边距 */
+            padding: 15px;
             overflow-y: auto;
             flex: 1;
         }
 
-        /* 面板配色 */
         .header-config { background-color: #a5f3fc; }
         .header-main   { background-color: #ff90e8; }
         .header-result { background-color: #fde047; }
 
-        /* === 控件优化 === */
         .section-label {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: 800;
             color: #444;
             text-transform: uppercase;
-            margin: 20px 0 10px 0;
+            margin: 15px 0 8px 0;
             border-bottom: 2px solid #eee;
-            padding-bottom: 5px;
+            padding-bottom: 4px;
         }
         .section-label:first-child { margin-top: 0; }
 
@@ -132,190 +124,271 @@
             border: 2px solid #000 !important;
             border-radius: 0 !important;
             font-weight: 600;
-            box-shadow: 3px 3px 0 rgba(0,0,0,0.05);
-            padding: 10px; /* 增加内衬 */
+            padding: 8px;
+            font-size: 0.9rem;
         }
         .form-control:focus, .form-select:focus {
             outline: none;
-            box-shadow: 4px 4px 0 rgba(0,0,0,1);
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.8);
             background: #fff;
             border-color: #000;
         }
 
-        /* 文本框充满剩余空间 */
-        textarea#text-input { 
-            resize: none; 
-            font-size: 1.1rem; 
-            line-height: 1.6;
-            padding: 15px;
-            width: 100%; /* 确保占满宽度 */
+        /* Line-numbered textarea */
+        .editor-wrap {
+            display: flex;
+            flex: 1;
+            border: 2px solid #000;
+            background: #fff;
+            min-height: 150px;
+        }
+        .line-numbers {
+            background: #f5f5f5;
+            border-right: 2px solid #000;
+            padding: 10px 8px;
+            text-align: right;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #888;
+            user-select: none;
+            overflow: hidden;
+        }
+        .editor-wrap textarea {
+            flex: 1;
+            border: none !important;
+            resize: none;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            padding: 10px;
+            outline: none;
+            font-family: inherit;
         }
 
-        /* === 按钮 === */
         .btn {
             border: 2px solid #000;
             border-radius: 0;
             font-weight: 800;
             text-transform: uppercase;
-            position: relative;
-            padding: 8px 16px;
+            padding: 6px 12px;
+            font-size: 0.85rem;
         }
-        .btn:hover { filter: brightness(1.05); background-color: #f0f0f0; }
+        .btn:hover { filter: brightness(1.05); }
         .btn:active { filter: brightness(0.95); }
 
         .btn-main {
             background: #000;
             color: #fff;
             width: 100%;
-            padding: 18px; /* 更大的点击区域 */
-            font-size: 1.3rem;
-            letter-spacing: 2px;
+            padding: 14px;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
             box-shadow: 4px 4px 0 #555;
-            margin-top: 10px;
         }
-        .btn-main:hover { color: #fde047; background: #222; box-shadow: 6px 6px 0 #555; }
+        .btn-main:hover { color: #fde047; background: #222; }
 
         .btn-tag {
             background: #fff;
-            font-size: 0.85rem;
-            padding: 6px 10px;
-            margin: 0 6px 6px 0;
-            box-shadow: 3px 3px 0 #ddd;
-            border-width: 2px;
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            margin: 0 4px 4px 0;
+            box-shadow: 2px 2px 0 #ddd;
         }
-        .btn-tag:hover { background: #fde047; box-shadow: 3px 3px 0 #000; transform:translate(-1px,-1px); }
+        .btn-tag:hover { background: #fde047; box-shadow: 2px 2px 0 #000; }
 
-        /* === 滑块 === */
         input[type=range] {
             width: 100%;
-            height: 25px; /* 增加高度便于点击 */
+            height: 20px;
             -webkit-appearance: none;
             background: transparent;
             cursor: pointer;
-            margin: 10px 0;
+            margin: 5px 0;
         }
         input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
             height: 4px;
             background: #000;
-            border-radius: 0;
         }
         input[type=range]::-webkit-slider-thumb {
-            height: 20px;
-            width: 20px;
+            height: 16px;
+            width: 16px;
             background: #ff90e8;
             border: 2px solid #000;
             -webkit-appearance: none;
-            margin-top: -8px;
-            box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+            margin-top: -6px;
         }
 
-        /* === 结果列表 === */
         .audio-item {
             border: 2px solid #000;
             background: #fff;
-            margin-bottom: 15px;
-            padding: 15px;
-            box-shadow: 4px 4px 0 #ddd;
-            transition: all 0.2s;
+            margin-bottom: 10px;
+            padding: 10px;
+            box-shadow: 3px 3px 0 #ddd;
+            font-size: 0.85rem;
         }
-        .audio-item:hover { box-shadow: 6px 6px 0 #000; transform: translateX(-2px); }
+        .audio-item:hover { box-shadow: 4px 4px 0 #000; }
 
-        /* === 滚动条 === */
-        ::-webkit-scrollbar { width: 10px; height: 10px; }
-        ::-webkit-scrollbar-track { background: #f5f5f5; border-left: 2px solid #000; }
-        ::-webkit-scrollbar-thumb { background: #000; border: 2px solid #fff; }
-        ::-webkit-scrollbar-thumb:hover { background: #444; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f5f5f5; }
+        ::-webkit-scrollbar-thumb { background: #000; }
 
-        /* === 上传按钮修复 === */
+        /* Tooltip icon */
+        .tip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #000;
+            color: #fff;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: help;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+
+        /* Small label */
+        .input-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #555;
+            margin-bottom: 2px;
+            display: block;
+        }
+
         #upload-btn { position: relative; overflow: hidden; }
         #file-input { position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:10; }
+
+        .github-links a {
+            margin-left: 10px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #000;
+            text-decoration: none;
+            padding: 6px 10px;
+            border: 2px solid #000;
+            background: #fff;
+        }
+        .github-links a:hover { background: #fde047; }
     </style>
 </head>
 <body>
 
 <div class="app-container">
     <div class="header-bar">
-        <div class="d-flex align-items-center gap-3">
-            <h1 class="m-0" style="font-weight:900; font-size:1.8rem;">CHAT_TTS <span style="color:#ff90e8">UI</span></h1>
-            <span class="badge bg-warning text-dark border border-dark rounded-0 p-2">v{{version}}</span>
+        <div class="d-flex align-items-center gap-2">
+            <h1 class="m-0" style="font-weight:900; font-size:1.5rem;">CHAT_TTS <span style="color:#ff90e8">UI</span></h1>
+            <span class="badge bg-warning text-dark border border-dark rounded-0 p-1" style="font-size:0.7rem;">v{{version}}</span>
         </div>
-        <a href="https://github.com/jianchang512/chatTTS-ui" target="_blank" class="btn btn-light fw-bold">GITHUB</a>
+        <div class="github-links">
+            <a href="https://github.com/jianchang512/chatTTS-ui" target="_blank">ChatTTS-UI</a>
+            <a href="https://github.com/2noise/ChatTTS" target="_blank">ChatTTS</a>
+        </div>
     </div>
 
     <div class="main-grid">
-        
-        <!-- 1. 左侧：配置 (Config) -->
-        <div class="panel-column config-col">
-            <div class="panel-header header-config">
-                <span>配置参数</span><span>⚙️</span>
-            </div>
+        <!-- Config Column -->
+        <div class="panel-column config-col" id="config-col">
+            <div class="panel-header header-config"><span>配置</span><span>⚙️</span></div>
             <div class="panel-body">
-                <div class="section-label">基础设置</div>
-                <select id="voice" class="form-select mb-3">
+                <div class="section-label">音色设置</div>
+                <select id="voice" class="form-select mb-2">
                     {% for speaker in speakers %}
                     <option value="{{speaker}}">{{speaker}}</option>
                     {% endfor %}
                 </select>
-                <div class="row g-3 mb-3">
-                    <div class="col-6"><input id="custom_voice" type="number" class="form-control" placeholder="自定义音色"></div>
-                    <div class="col-6"><input id="text_seed" type="number" class="form-control" value="42" placeholder="Seed"></div>
-                </div>
-
-                <div class="section-label">模型微调</div>
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between fw-bold mb-1"><span>语速 Speed</span><span class="badge bg-dark rounded-0" id="val-speed">5</span></div>
-                    <input type="range" id="speed" min="1" max="9" value="5" oninput="document.getElementById('val-speed').innerText=this.value">
-                </div>
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between fw-bold mb-1"><span>温度 Temp</span><span class="badge bg-dark rounded-0" id="val-temp">0.1</span></div>
-                    <input type="range" id="temperature" min="0.00001" max="1.0" step="0.00001" value="0.1" oninput="document.getElementById('val-temp').innerText=this.value">
-                </div>
-                <div class="row g-3 mb-3">
+                <div class="row g-2 mb-2">
                     <div class="col-6">
-                        <div class="d-flex justify-content-between fw-bold mb-1"><span>Top P</span><span class="small" id="val-topp">0.7</span></div>
-                        <input type="range" id="top_p" min="0.001" max="0.9" step="0.05" value="0.7" oninput="document.getElementById('val-topp').innerText=this.value">
+                        <label class="input-label">自定义音色ID <span class="tip-icon" title="填写后将忽略左侧音色选择，以该值获取音色。如 2000, 8000 等">?</span></label>
+                        <input id="custom_voice" type="number" class="form-control" placeholder="如 3000">
                     </div>
                     <div class="col-6">
-                        <div class="d-flex justify-content-between fw-bold mb-1"><span>Top K</span><span class="small" id="val-topk">20</span></div>
+                        <label class="input-label">Text Seed <span class="tip-icon" title="文本随机种子，影响生成结果的随机性">?</span></label>
+                        <input id="text_seed" type="number" class="form-control" value="42">
+                    </div>
+                </div>
+
+                <div class="section-label">模型参数</div>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="input-label mb-0">语速 Speed <span class="tip-icon" title="控制语速，1最慢，9最快，默认5">?</span></span>
+                        <span class="badge bg-dark rounded-0" id="val-speed">5</span>
+                    </div>
+                    <input type="range" id="speed" min="1" max="9" value="5" oninput="document.getElementById('val-speed').innerText=this.value">
+                </div>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="input-label mb-0">温度 Temp <span class="tip-icon" title="采样温度，越高随机性越大，越低越稳定">?</span></span>
+                        <span class="badge bg-dark rounded-0" id="val-temp">0.1</span>
+                    </div>
+                    <input type="range" id="temperature" min="0.00001" max="1.0" step="0.05" value="0.1" oninput="document.getElementById('val-temp').innerText=parseFloat(this.value).toFixed(2)">
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="input-label mb-0">Top P <span class="tip-icon" title="核采样参数，控制生成多样性">?</span></span>
+                            <span class="small" id="val-topp">0.7</span>
+                        </div>
+                        <input type="range" id="top_p" min="0.1" max="0.9" step="0.05" value="0.7" oninput="document.getElementById('val-topp').innerText=parseFloat(this.value).toFixed(2)">
+                    </div>
+                    <div class="col-6">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="input-label mb-0">Top K <span class="tip-icon" title="Top-K采样，限制每步候选token数量">?</span></span>
+                            <span class="small" id="val-topk">20</span>
+                        </div>
                         <input type="range" id="top_k" min="1" max="20" value="20" oninput="document.getElementById('val-topk').innerText=this.value">
                     </div>
                 </div>
 
                 <div class="section-label">Prompt & 高级</div>
-                <input id="prompt" class="form-control mb-3" value="[break_6]" placeholder="Prompt...">
+                <label class="input-label">Refine Prompt <span class="tip-icon" title="控制语气的prompt，如 [oral_2][laugh_0][break_6]。oral控制口语化程度(0-9)，laugh控制笑声(0-2)，break控制停顿(0-7)">?</span></label>
+                <textarea id="prompt" class="form-control mb-2" rows="2" style="font-size:0.85rem;">[oral_2][laugh_0][break_6]</textarea>
                 
                 <button class="btn w-100 border-dark bg-light text-start py-2" type="button" data-bs-toggle="collapse" data-bs-target="#advConfig">
-                    ▼ 展开高级选项
+                    ▼ 高级选项
                 </button>
                 <div class="collapse" id="advConfig">
-                    <div class="card card-body border-dark rounded-0 p-3 bg-light mt-2">
-                        <div class="row g-3 mb-2">
-                            <div class="col-6"><label class="small fw-bold">分片长</label><input id="segment_len" type="number" class="form-control" value="0"></div>
-                            <div class="col-6"><label class="small fw-bold">分片秒</label><input id="segment_seconds" type="number" class="form-control" value="0"></div>
-                            <div class="col-6"><label class="small fw-bold">Infer</label><input id="infer_max_new_token" type="number" class="form-control" value="2048"></div>
-                            <div class="col-6"><label class="small fw-bold">Refine</label><input id="refine_max_new_token" type="number" class="form-control" value="384"></div>
+                    <div class="card card-body border-dark rounded-0 p-2 bg-light mt-2">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="input-label">分片长度 <span class="tip-icon" title="单段最大字符数，0=自动分片">?</span></label>
+                                <input id="segment_len" type="number" class="form-control" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="input-label">分片时长(秒) <span class="tip-icon" title="每段目标时长(秒)，大于0时优先生效">?</span></label>
+                                <input id="segment_seconds" type="number" class="form-control" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="input-label">Infer Token <span class="tip-icon" title="推理最大token数，默认2048">?</span></label>
+                                <input id="infer_max_new_token" type="number" class="form-control" value="2048">
+                            </div>
+                            <div class="col-6">
+                                <label class="input-label">Refine Token <span class="tip-icon" title="Refine text最大token数，默认384">?</span></label>
+                                <input id="refine_max_new_token" type="number" class="form-control" value="384">
+                            </div>
                         </div>
                         <div class="form-check mt-2">
                             <input type="checkbox" class="form-check-input border-dark" id="skip_refine" checked>
-                            <label class="form-check-label fw-bold" for="skip_refine">跳过 Refine Text</label>
+                            <label class="form-check-label small fw-bold" for="skip_refine">跳过 Refine Text <span class="tip-icon" title="如果文本中已加入控制符或效果较差，可选中跳过">?</span></label>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 2. 中间：主控 (Main) -->
-        <div class="panel-column main-col">
-            <div class="panel-header header-main">
-                <span>创作中心</span><span>📝</span>
-            </div>
-            <div class="panel-body d-flex flex-column">
-                <!-- 文本框自动撑满剩余高度 -->
-                <textarea id="text-input" class="form-control flex-grow-1 mb-4 w-100" placeholder="在此输入要转换的文本...&#10;建议每行一句..."></textarea>
+        <div class="splitter" id="splitter1"></div>
 
-                <div class="section-label mt-0">快捷控制符</div>
-                <div class="d-flex flex-wrap gap-2 mb-4">
+        <!-- Main Column -->
+        <div class="panel-column main-col" id="main-col">
+            <div class="panel-header header-main"><span>工作区</span><span>📝</span></div>
+            <div class="panel-body d-flex flex-column">
+                <div class="editor-wrap mb-3">
+                    <div class="line-numbers" id="line-numbers">1</div>
+                    <textarea id="text-input" placeholder="在此输入要转换的文本...&#10;建议每行一句..."></textarea>
+                </div>
+
+                <div class="section-label mt-0">快捷控制符 <span class="tip-icon" title="点击插入控制符到光标位置。[laugh]笑声 [uv_break]停顿 [oral_N]口语化程度 [break_N]停顿强度">?</span></div>
+                <div class="d-flex flex-wrap mb-3">
                     <button class="btn btn-tag tts-token-btn" data-token="[laugh]">[laugh]</button>
                     <button class="btn btn-tag tts-token-btn" data-token="[uv_break]">[uv_break]</button>
                     <button class="btn btn-tag tts-token-btn" data-token="[oral_2]">[oral_2]</button>
@@ -324,39 +397,36 @@
                 </div>
 
                 <div class="section-label">语气预设</div>
-                <div class="d-flex gap-3 mb-4">
-                    <button class="btn btn-light flex-fill border-dark tone-preset-btn py-3" data-prompt="[oral_2][laugh_0][break_6]">😊 聊天</button>
-                    <button class="btn btn-light flex-fill border-dark tone-preset-btn py-3" data-prompt="[oral_0][break_4]">🎙️ 播音</button>
-                    <button class="btn btn-light flex-fill border-dark tone-preset-btn py-3" data-prompt="[oral_3][laugh_1][break_3]">🎭 夸张</button>
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-light flex-fill border-dark tone-preset-btn py-2" data-prompt="[oral_2][laugh_0][break_6]">😊 聊天</button>
+                    <button class="btn btn-light flex-fill border-dark tone-preset-btn py-2" data-prompt="[oral_0][break_4]">🎙️ 播音</button>
+                    <button class="btn btn-light flex-fill border-dark tone-preset-btn py-2" data-prompt="[oral_3][laugh_1][break_3]">🎭 夸张</button>
                 </div>
 
-                <button id="submit-btn" class="btn btn-main mb-3">⚡ 立即生成音频</button>
+                <button id="submit-btn" class="btn btn-main mb-2">⚡ 立即生成</button>
                 
-                <div class="d-flex gap-3 mt-3">
-                    <button id="upload-btn" class="btn btn-light flex-fill border-dark py-2 fw-bold">
-                        📂 导入 TXT
+                <div class="d-flex gap-2">
+                    <button id="upload-btn" class="btn btn-light flex-fill border-dark py-2">
+                        📂 导入TXT
                         <input type="file" id="file-input" accept=".txt">
                     </button>
-                    <button id="clear-btn" class="btn btn-danger flex-fill border-dark py-2 fw-bold" style="background:#ff4d4d; color:white;">
-                        🗑️ 清空
-                    </button>
+                    <button id="clear-btn" class="btn flex-fill border-dark py-2" style="background:#ff4d4d; color:white;">🗑️ 清空</button>
                 </div>
             </div>
         </div>
 
-        <!-- 3. 右侧：结果 (Results) -->
-        <div class="panel-column result-col">
-            <div class="panel-header header-result">
-                <span>生成结果</span><span>🎵</span>
-            </div>
+        <div class="splitter" id="splitter2"></div>
+
+        <!-- Result Column -->
+        <div class="panel-column result-col" id="result-col">
+            <div class="panel-header header-result"><span>结果</span><span>🎵</span></div>
             <div class="panel-body" id="audio-container">
-                <div class="text-center text-muted mt-5" id="empty-state">
-                    <div style="font-size:4rem; opacity:0.15;">∅</div>
-                    <div class="fs-5 mt-2">暂无生成记录</div>
+                <div class="text-center text-muted mt-4" id="empty-state">
+                    <div style="font-size:3rem; opacity:0.15;">∅</div>
+                    <div class="small">暂无生成记录</div>
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
@@ -365,46 +435,114 @@
 <script src="/static/js/bootstrap.bundle.min.js"></script>
 <script>
 $(document).ready(function() {
+    // === Line Numbers ===
+    var $textarea = $('#text-input');
+    var $lineNums = $('#line-numbers');
+    
+    function updateLineNumbers() {
+        var lines = $textarea.val().split('\n').length;
+        var nums = [];
+        for (var i = 1; i <= Math.max(lines, 1); i++) nums.push(i);
+        $lineNums.html(nums.join('<br>'));
+    }
+    
+    $textarea.on('input scroll', function() {
+        updateLineNumbers();
+        $lineNums.scrollTop($textarea.scrollTop());
+    });
+    updateLineNumbers();
+
+    // === Splitter Resize ===
+    function initSplitter(splitterId, leftColId, rightColId, minLeft, minRight) {
+        var $splitter = $('#' + splitterId);
+        var $left = $('#' + leftColId);
+        var $right = $('#' + rightColId);
+        var dragging = false;
+        
+        $splitter.on('mousedown', function(e) {
+            e.preventDefault();
+            dragging = true;
+            $splitter.addClass('dragging');
+            $(document).on('mousemove.splitter', function(e) {
+                if (!dragging) return;
+                var containerLeft = $('.main-grid').offset().left;
+                var containerWidth = $('.main-grid').width();
+                
+                if (splitterId === 'splitter1') {
+                    var newWidth = e.pageX - containerLeft;
+                    newWidth = Math.max(minLeft, Math.min(newWidth, containerWidth - minRight - 350));
+                    $left.css('width', newWidth + 'px');
+                } else {
+                    var rightEdge = containerLeft + containerWidth;
+                    var newWidth = rightEdge - e.pageX;
+                    newWidth = Math.max(minRight, Math.min(newWidth, containerWidth - minLeft - 350));
+                    $right.css('width', newWidth + 'px');
+                }
+            });
+            $(document).on('mouseup.splitter', function() {
+                dragging = false;
+                $splitter.removeClass('dragging');
+                $(document).off('.splitter');
+            });
+        });
+    }
+    
+    initSplitter('splitter1', 'config-col', 'main-col', 200, 250);
+    initSplitter('splitter2', 'main-col', 'result-col', 250, 200);
+
+    // === Smart Token Insert ===
     function insertToken($textarea, token) {
         var el = $textarea.get(0);
         if (!el) return;
         var start = el.selectionStart || 0;
-        var end = el.selectionEnd || 0;
         var value = el.value;
-        el.value = value.substring(0, start) + token + value.substring(end);
+        
+        // Check character before cursor
+        var charBefore = start > 0 ? value.charAt(start - 1) : '';
+        var insertText = token;
+        
+        // Add space if previous char is not: space, newline, [, ], or start of text
+        if (start > 0 && charBefore !== ' ' && charBefore !== '\n' && charBefore !== '[' && charBefore !== ']') {
+            insertText = ' ' + token;
+        }
+        
+        el.value = value.substring(0, start) + insertText + value.substring(start);
         el.focus();
-        el.selectionStart = el.selectionEnd = start + token.length;
+        var newPos = start + insertText.length;
+        el.selectionStart = el.selectionEnd = newPos;
+        updateLineNumbers();
     }
 
-    function appendAudioItem(audio, autoPlay, jsCode, $container) {
+    // === Audio Item ===
+    function appendAudioItem(audio, autoPlay, curlCode, $container) {
         $('#empty-state').remove();
         var pos = audio.filename.lastIndexOf('/') + 1;
         var filename = audio.filename.substr(pos);
         var count = $('#audio-container').find('.audio-item').length + 1;
         var badge = '';
         if (audio.is_merged === 1) badge = '<span class="badge bg-success text-dark rounded-0 ms-1">合并</span>';
-        else if (audio.part_index) badge = '<span class="badge bg-secondary text-dark rounded-0 ms-1">Part ' + audio.part_index + '</span>';
+        else if (audio.part_index) badge = '<span class="badge bg-secondary rounded-0 ms-1">P' + audio.part_index + '</span>';
         
         var durationText = (audio.audio_duration && audio.audio_duration > 0) ? ' | ' + audio.audio_duration + 's' : '';
         var autoplayAttr = autoPlay ? ' autoplay' : '';
-        jsCode = jsCode || '';
+        curlCode = curlCode || '';
         $container = $container || $('#audio-container');
 
         var html = `
         <div class="audio-item" data-filename="${filename}">
-            <div class="d-flex justify-content-between align-items-center border-bottom border-dark pb-2 mb-2">
-                <div class="fw-bold text-truncate" style="max-width:85%">#${count} ${filename} ${badge}</div>
-                <button onclick="deleteWavItem(this)" class="btn btn-link text-danger p-0 fw-bold text-decoration-none fs-4" style="line-height:1">&times;</button>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <div class="fw-bold text-truncate" style="max-width:80%; font-size:0.8rem;">#${count} ${filename}${badge}</div>
+                <button onclick="deleteWavItem(this)" class="btn btn-link text-danger p-0" style="font-size:1.2rem; line-height:1;">&times;</button>
             </div>
-            <audio controls${autoplayAttr} src="${audio.url}" style="width:100%; height:32px;"></audio>
-            <div class="d-flex justify-content-between align-items-center mt-3">
-                <div class="small text-muted">${audio.inference_time}s ${durationText}</div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-info btn-sm py-1 px-2 rounded-0 border-dark text-white fw-bold show-js-btn" data-js-code="${encodeURIComponent(jsCode)}">API</button>
-                    <a href="${audio.url}" download="${filename}" class="btn btn-success btn-sm py-1 px-2 rounded-0 border-dark fw-bold">下载</a>
+            <audio controls${autoplayAttr} src="${audio.url}" style="width:100%; height:28px;"></audio>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <div class="text-muted" style="font-size:0.75rem;">${audio.inference_time || 0}s${durationText}</div>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-info btn-sm py-0 px-1 rounded-0 border-dark text-white show-curl-btn" style="font-size:0.7rem;" data-curl="${encodeURIComponent(curlCode)}">API</button>
+                    <a href="${audio.url}" download="${filename}" class="btn btn-success btn-sm py-0 px-1 rounded-0 border-dark" style="font-size:0.7rem;">DL</a>
                 </div>
             </div>
-            <div class="mt-2 bg-dark text-light d-none code-container p-3 small text-break border border-dark font-monospace"></div>
+            <div class="mt-2 bg-dark text-light d-none curl-container p-2" style="font-size:0.7rem; word-break:break-all;"></div>
         </div>`;
         $container.prepend(html);
     }
@@ -414,49 +552,27 @@ $(document).ready(function() {
         var batchIndex = $('#audio-container').find('.audio-batch').length + 1;
         var batchId = 'batch-' + Date.now();
         var html = `
-        <div class="audio-batch mb-4" data-batch-id="${batchId}">
-            <div class="bg-warning border border-dark p-2 px-3 d-flex justify-content-between align-items-center border-bottom-0">
+        <div class="audio-batch mb-3" data-batch-id="${batchId}">
+            <div class="bg-warning border border-dark p-1 px-2 d-flex justify-content-between align-items-center" style="font-size:0.85rem;">
                 <span class="fw-bold">BATCH #${batchIndex} [${audioList.length}]</span>
-                <button class="btn btn-dark btn-sm py-0 rounded-0 fw-bold delete-batch-btn">DEL ALL</button>
+                <button class="btn btn-dark btn-sm py-0 px-1 rounded-0 delete-batch-btn" style="font-size:0.7rem;">DEL ALL</button>
             </div>
-            <div class="batch-body p-2 border border-dark bg-white"></div>
+            <div class="batch-body p-1 border border-dark border-top-0 bg-white"></div>
         </div>`;
         $('#audio-container').prepend(html);
         var $body = $('#audio-container').find('.audio-batch').first().find('.batch-body');
         
-        // Construct Python API Code Example
-        var pythonCode = 
-`import requests
-import json
-
-# API Endpoint
-url = "http://${location.host}/tts"
-
-# Parameters
-data = ${JSON.stringify(data, null, 4)}
-
-# Send Request
-try:
-    response = requests.post(url, data=data)
-    if response.status_code == 200:
-        result = response.json()
-        print(json.dumps(result, indent=4, ensure_ascii=False))
-        # Output Format:
-        # {
-        #     "code": 0, 
-        #     "msg": "ok", 
-        #     "audio_files": [
-        #         {"filename": "...", "url": "...", "inference_time": ...}
-        #     ]
-        # }
-    else:
-        print(f"Error: {response.status_code} - {response.text}")
-except Exception as e:
-    print(f"Request Failed: {e}")
-`;
+        // Build curl command
+        var curlParts = [];
+        for (var key in data) {
+            if (data.hasOwnProperty(key)) {
+                curlParts.push('-d "' + key + '=' + encodeURIComponent(data[key]) + '"');
+            }
+        }
+        var curlCode = 'curl -X POST "http://' + location.host + '/tts" \\\n  ' + curlParts.join(' \\\n  ');
         
         audioList.forEach(function(audio) {
-            appendAudioItem(audio, true, pythonCode, $body);
+            appendAudioItem(audio, true, curlCode, $body);
         });
     }
 
@@ -474,8 +590,9 @@ except Exception as e:
     }
     loadAudioList();
 
+    // === Submit ===
     $('#submit-btn').click(function() {
-        var text = $('#text-input').val().trim();
+        var text = $textarea.val().trim();
         if (!text) { layer.msg('请先输入文本'); return; }
         var index = layer.load(1);
         
@@ -507,35 +624,41 @@ except Exception as e:
                 if (res.code === 0 && res.audio_files) { appendAudioBatch(res.audio_files, data); }
                 else { layer.alert(res.msg || '生成失败', {title:false}); }
             },
-            error: function(e) { layer.close(index); layer.alert('错误', {title:false}); }
+            error: function() { layer.close(index); layer.alert('请求错误', {title:false}); }
         });
     });
 
-    $(document).on('click', '.show-js-btn', function() {
-        var box = $(this).closest('.audio-item').find('.code-container');
+    // === Event Handlers ===
+    $(document).on('click', '.show-curl-btn', function() {
+        var box = $(this).closest('.audio-item').find('.curl-container');
         box.toggleClass('d-none');
-        if(!box.hasClass('d-none')) box.html('<pre style="margin:0;color:#a5f3fc;white-space:pre-wrap;">'+decodeURIComponent($(this).data('js-code'))+'</pre>');
+        if (!box.hasClass('d-none')) {
+            box.html('<pre style="margin:0; color:#a5f3fc; white-space:pre-wrap;">' + decodeURIComponent($(this).data('curl')) + '</pre>');
+        }
     });
 
-    $(document).on('click', '.tts-token-btn', function() { insertToken($('#text-input'), $(this).data('token')); });
+    $(document).on('click', '.tts-token-btn', function() { insertToken($textarea, $(this).data('token')); });
     $(document).on('click', '.tone-preset-btn', function() { 
-        if($(this).data('prompt')) $('#prompt').val($(this).data('prompt')); 
+        if ($(this).data('prompt')) $('#prompt').val($(this).data('prompt')); 
     });
 
-    $('#upload-btn').click(function(){ $('#file-input').click(); });
-    $('#file-input').change(function(e){
+    $('#upload-btn').click(function() { $('#file-input').click(); });
+    $('#file-input').change(function(e) {
         var f = e.target.files[0];
-        if(f) {
+        if (f) {
             var r = new FileReader();
-            r.onload = function(e) { $('#text-input').val(e.target.result); };
+            r.onload = function(e) { $textarea.val(e.target.result); updateLineNumbers(); };
             r.readAsText(f, 'UTF-8');
         }
     });
 
     $('#clear-btn').click(function() {
-        layer.confirm('确定清空?', {title:false, btn:['是','否']}, function(){
-            $.ajax({url:'/clear_wavs', type:'POST', success:function(res){
-                if(res.code===0) { $('#audio-container').html('<div class="text-center text-muted mt-5" id="empty-state"><div style="font-size:4rem;opacity:0.15;">∅</div><div class="fs-5 mt-2">暂无生成记录</div></div>'); layer.msg('已清空'); }
+        layer.confirm('确定清空所有音频?', {title:false, btn:['是','否']}, function() {
+            $.ajax({url:'/clear_wavs', type:'POST', success:function(res) {
+                if (res.code === 0) { 
+                    $('#audio-container').html('<div class="text-center text-muted mt-4" id="empty-state"><div style="font-size:3rem;opacity:0.15;">∅</div><div class="small">暂无生成记录</div></div>'); 
+                    layer.msg('已清空'); 
+                }
             }});
         });
     });
@@ -543,11 +666,11 @@ except Exception as e:
     $(document).on('click', '.delete-batch-btn', function() {
         var $b = $(this).closest('.audio-batch');
         var fs = [];
-        $b.find('.audio-item').each(function(){ fs.push($(this).data('filename')); });
-        if(!fs.length) { $b.remove(); return; }
-        layer.confirm('删除本批次?', {title:false}, function(){
-            $.ajax({url:'/delete_wavs_batch', type:'POST', data:{filenames:fs.join(',')}, success:function(res){
-                if(res.code===0) { $b.remove(); layer.msg('已删除'); }
+        $b.find('.audio-item').each(function() { fs.push($(this).data('filename')); });
+        if (!fs.length) { $b.remove(); return; }
+        layer.confirm('删除本批次?', {title:false}, function() {
+            $.ajax({url:'/delete_wavs_batch', type:'POST', data:{filenames:fs.join(',')}, success:function(res) {
+                if (res.code === 0) { $b.remove(); layer.msg('已删除'); }
             }});
         });
     });
@@ -555,11 +678,18 @@ except Exception as e:
     window.deleteWavItem = function(btn) {
         var $i = $(btn).closest('.audio-item');
         var f = $i.data('filename');
-        if(!f) return;
-        $.ajax({url:'/delete_wav', type:'POST', data:{filename:f}, success:function(res){
-            if(res.code===0) $i.remove();
+        if (!f) return;
+        $.ajax({url:'/delete_wav', type:'POST', data:{filename:f}, success:function(res) {
+            if (res.code === 0) $i.remove();
         }});
     };
+
+    // Initialize Bootstrap tooltips
+    $('[title]').each(function() {
+        $(this).attr('data-bs-toggle', 'tooltip').attr('data-bs-placement', 'top');
+    });
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function(el) { return new bootstrap.Tooltip(el); });
 });
 </script>
 </body>
