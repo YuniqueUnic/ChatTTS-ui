@@ -1,191 +1,331 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title>ChatTTS WebUI & API - v{{version}}</title>
+    <title>ChatTTS WebUI & API - v{{version}}</title>
     <link href="/static/js/bootstrap.min.css" rel="stylesheet">
-	
-	<style>
-	#upload-btn{
-		position:relative;
-	}
-	#file-input{
-		position:absolute;
-		left:0;
-		right:0;
-		top:0;
-		bottom:0;
-		width:100%;
-		height:100%;
-		z-index:1;
-		opacity:0;
-		cursor:pointer;
-		font-size:0;
-		
-	}
-	#text-input{
-		min-height:200px
-	}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <style>
+        :root {
+            --bg-color: #f0f0f0;
+            --surface-color: #ffffff;
+            --border-color: #000000;
+            --shadow-color: #000000;
+            --primary-color: #a8dadc;
+            --accent-color: #ff6b6b;
+            --text-color: #000000;
+            --border-width: 3px;
+            --shadow-offset: 5px;
+        }
 
-    .btn-warning {
-      background-color: #ffc107;
-      border-color: #ffc107;
-    }
-	.font12{
-		font-size:12px
-	}
-	.w-50px{
-		display:inline-block;
-		width:50px;
-		white-space:nowrap;
-		overflow:visible
-	}
-	
-	</style>
+        body {
+            background-color: var(--bg-color);
+            font-family: 'Courier New', Courier, monospace; /* Brutalist style font */
+            color: var(--text-color);
+            padding-bottom: 50px;
+        }
+
+        /* Brutalist Components */
+        .brutal-box {
+            background-color: var(--surface-color);
+            border: var(--border-width) solid var(--border-color);
+            box-shadow: var(--shadow-offset) var(--shadow-offset) 0px var(--shadow-color);
+            padding: 20px;
+            margin-bottom: 25px;
+            transition: transform 0.2s;
+        }
+        
+        .brutal-box:hover {
+            transform: translate(-1px, -1px);
+        }
+
+        .brutal-header {
+            font-weight: 900;
+            text-transform: uppercase;
+            border-bottom: var(--border-width) solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            letter-spacing: -1px;
+        }
+
+        /* Form Controls */
+        .form-control, .form-select, .input-group-text {
+            border: 2px solid var(--border-color) !important;
+            border-radius: 0 !important;
+            color: var(--text-color) !important;
+            box-shadow: 3px 3px 0px rgba(0,0,0,0.1);
+            font-weight: 600;
+        }
+
+        .form-control:focus, .form-select:focus {
+            box-shadow: 4px 4px 0px var(--border-color);
+            background-color: #fffae6;
+            transform: translate(-2px, -2px);
+            outline: none;
+        }
+
+        .input-group-text {
+            background-color: var(--border-color) !important;
+            color: var(--surface-color) !important;
+            font-weight: bold;
+        }
+
+        /* Buttons */
+        .btn {
+            border: 2px solid var(--border-color);
+            border-radius: 0;
+            box-shadow: 4px 4px 0px var(--shadow-color);
+            font-weight: 800;
+            text-transform: uppercase;
+            transition: all 0.15s;
+            margin: 5px;
+            position: relative;
+            top: 0;
+            left: 0;
+        }
+
+        .btn:hover {
+            box-shadow: 6px 6px 0px var(--shadow-color);
+            transform: translate(-2px, -2px);
+        }
+
+        .btn:active {
+            box-shadow: 2px 2px 0px var(--shadow-color);
+            transform: translate(2px, 2px);
+        }
+
+        .btn-primary { background-color: #4cc9f0 !important; color: black !important; }
+        .btn-secondary { background-color: #e0e0e0 !important; color: black !important; }
+        .btn-warning { background-color: #ffd166 !important; color: black !important; }
+        .btn-danger { background-color: #ef476f !important; color: black !important; }
+        .btn-outline-secondary { color: black !important; border-color: black !important; }
+        .btn-outline-secondary:hover { background-color: black !important; color: white !important; }
+        .btn-info { background-color: #118ab2 !important; color: white !important; }
+        .btn-success { background-color: #06d6a0 !important; color: black !important; }
+
+        /* Sliders */
+        input[type=range] {
+            accent-color: var(--border-color);
+            height: 20px;
+        }
+
+        /* Custom UI tweaks */
+        #text-input {
+            min-height: 250px;
+            font-size: 1.1rem;
+            resize: vertical;
+        }
+
+        .audio-item {
+            border: 2px solid var(--border-color);
+            background: #fff;
+            margin-bottom: 15px;
+            padding: 15px;
+            box-shadow: 4px 4px 0 #ddd;
+        }
+        
+        .badge {
+            border: 1px solid black;
+            border-radius: 0;
+            color: black !important;
+        }
+        .badge.bg-success { background-color: #06d6a0 !important; }
+        .badge.bg-secondary { background-color: #ddd !important; }
+
+        /* Helper Classes */
+        .font12 { font-size: 12px; font-weight: bold; }
+        .param-label { font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; }
+        
+        #upload-btn { position: relative; overflow: hidden; }
+        #file-input { position: absolute; left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+        
+        .section-label {
+            background: black;
+            color: white;
+            padding: 2px 8px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+    </style>
 </head>
-<body>	
+<body>
 
-<div class="container my-4 px-0">
-	<div>
-		<h1 class="text-center">ChatTTS WebUI & API<span class="fs-6">(v{{version}})</span></h1>
-	</div>
-	<hr>
-    <div class="row justify-content-center">
-        <div class="col-12  my-2">
-            <textarea id="text-input" class="form-control d-block" rows="3" placeholder="在此输入要转换的文本,以行为单位合成..."></textarea>
-			<span class="text-secondary fs-6">除文本框必填外，其他均为可选，若不懂无需填写</span>
-			<div class="d-flex flex-wrap align-items-center mt-2" id="tts-toolbar">
-				<span class="text-secondary font12 me-2">快捷插入控制符:</span>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh]">[laugh]</button>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[uv_break]">[uv_break]</button>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[oral_2]">[oral_2]</button>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh_0]">[laugh_0]</button>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[break_6]">[break_6]</button>
-			</div>
-			<div class="d-flex flex-wrap align-items-center mt-1" id="tone-presets">
-				<span class="text-secondary font12 me-2">语气预设:</span>
-				<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_2][laugh_0][break_6]" data-toggle="tooltip" title="适合聊天、轻松语气">聊天</button>
-				<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_0][break_4]" data-toggle="tooltip" title="适合播音、正式语气">播音</button>
-				<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_3][laugh_1][break_3]" data-toggle="tooltip" title="适合夸张、情绪较强">夸张</button>
-			</div>
-			<div class="d-flex flex-wrap align-items-center mt-2" id="tts-toolbar">
-				<span class="text-secondary font12 me-2">快捷插入控制符:</span>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh]">[laugh]</button>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[uv_break]">[uv_break]</button>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[oral_2]">[oral_2]</button>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[laugh_0]">[laugh_0]</button>
-				<button type="button" class="btn btn-sm btn-outline-secondary me-1 tts-token-btn" data-token="[break_6]">[break_6]</button>
-			</div>
-			<div class="d-flex flex-wrap align-items-center mt-1" id="tone-presets">
-				<span class="text-secondary font12 me-2">语气预设:</span>
-				<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_2][laugh_0][break_6]" data-toggle="tooltip" title="适合聊天、轻松语气">聊天</button>
-				<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_0][break_4]" data-toggle="tooltip" title="适合播音、正式语气">播音</button>
-				<button type="button" class="btn btn-sm btn-outline-primary me-1 tone-preset-btn" data-prompt="[oral_3][laugh_1][break_3]" data-toggle="tooltip" title="适合夸张、情绪较强">夸张</button>
-			</div>
+<div class="container my-5">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-8">
+            <h1 class="display-4" style="font-weight: 900; text-shadow: 3px 3px 0px #ddd;">CHAT_TTS <span style="font-size: 0.5em; background: black; color: white; padding: 0 10px;">WebUI</span></h1>
         </div>
-		<div class="col-12 my-2 ">
-			<div class="row align-items-center gx-1">
-				<div class="col align-items-center input-group">
-					<span class="input-group-text">选择音色</span>
-					<select id="voice" class="form-control">
-						{% for speaker in speakers %}
-							<option value="{{speaker}}">{{speaker}}</option>
-						{% endfor %}
-					</select>
-				</div>
-				<div class="col align-items-center input-group">
-						<span class="input-group-text" id="">音色值</span>
-						<input id="custom_voice" data-toggle="tooltip" title="填写后将忽略左侧音色选择，以该填写值获取音色,例如 2000，8000等" class="form-control" placeholder="自定义音色种子值，大于1,如 3000 9000等" type="number" min="0" />
-				</div>
-				<div class="col align-items-center input-group">
-					<span class="input-group-text  rounded-0 px-1" id="">text seed</span>
-					<input id="text_seed" class="form-control  rounded-0 " value="42" type="number" min="0" >
-				</div>
-				<div class="col align-items-center input-group">
-					<span class="input-group-text  rounded-0 px-1" id="">分片长度</span>
-					<input id="segment_len" class="form-control  rounded-0 " value="0" type="number" min="0" data-toggle="tooltip" title="单段最大字符数，0=自动" >
-				</div>
-				<div class="col align-items-center input-group">
-					<span class="input-group-text  rounded-0 px-1" id="">分片时长(秒)</span>
-					<input id="segment_seconds" class="form-control  rounded-0 " value="0" type="number" min="0" step="1" data-toggle="tooltip" title="每段目标时长(秒)，大于0时优先生效" >
-				</div>
-				<div class="col align-items-center input-group"> 
-						<span class="input-group-text" id="">Prompt</span>
-						<input id="prompt" value="[break_6]" class="form-control" data-toggle="tooltip" title="填写prompt，如 [oral_2][laugh_0][break_6]" placeholder="如 [oral_2][laugh_0][break_6]" />
-				</div>
-				
-				<div class="col-2 align-items-center">
-				  <div class="form-check" title="如果文本中加入了控制符或效果较差，可尝试选中该项" data-toggle="tooltip">
-					<input type="checkbox" checked class="form-check-input" id="skip_refine">
-					<label class="form-check-label" for="skip_refine">跳过refine text</label>
-				  </div>
-				</div>
-				<div class="col-2 align-items-center d-none">
-				  <div class="form-check" title="是否流式" data-toggle="tooltip">
-					<input type="checkbox" class="form-check-input" id="is_stream">
-					<label class="form-check-label" for="is_stream">流式?</label>
-				  </div>
-				</div>
-			</div>
-		</div>
-		<div class="col-12 my-2 d-flex align-items-center justify-content-between" id="temper_wrap">
-			<div class="row gx-1">
-			<div class="align-items-center col d-flex">
-					<span class="input-group-text  rounded-0 px-1" id="">infer token</span>
-					<input id="infer_max_new_token" data-toggle="tooltip" class="form-control rounded-0 " value="2048" type="number" min="1024"  title="推理最大token，默认2048">
-			</div>
-			<div class="align-items-center col d-flex">
-					<span class="input-group-text  rounded-0 px-1" id="">refine token</span>
-					<input id="refine_max_new_token" data-toggle="tooltip" class="form-control  rounded-0 " value="384" type="number" min="1" title="refine text 最大token，默认384，未跳过refine text时有效">
-			</div>
-			<div class="form-group d-flex col-auto align-items-center">
-				<label for="speed">语速</label>
-				<input type="range" class="form-control-range" id="speed" min="1" max="9" step="1" value="5">
-				<span class="w-50px text-secondary font12">5</span>
-			</div>
-			
-			<div class="form-group d-flex col align-items-center">
-				<label for="temperature">temperature</label>
-				<input type="range" class="form-control-range" id="temperature" min="0.00001" max="1.0" step="0.00001" value="0.1">
-				<span class="w-50px text-secondary font12">0.1</span>
-			</div>
-			
-			<div class="form-group d-flex col align-items-center">
-				<label for="top_p">top_p</label>
-				<input type="range" class="form-control-range" id="top_p" min="0.001" max="0.9" step="0.05" value="0.7">
-				<span class="w-50px text-secondary font12">0.05</span>
-
-			</div>
-			
-			<div class="form-group d-flex col align-items-center">
-				<label for="top_k">top_k</label>
-				<input type="range" class="form-control-range" id="top_k" min="1" max="20" step="1" value="20">
-				<span class="w-50px text-secondary font12">20</span>				
-			</div>			
-			</div>
-		</div>
-        <div class="col-12  my-4 text-center">
-            <button id="submit-btn" class="btn btn-primary">立即合成声音</button>
-			<button id="upload-btn" class="btn btn-secondary">导入txt
-				<input type="file" id="file-input" accept=".txt"  >
-			</button>
-            <button id="clear-btn" class="btn btn-warning text-light" data-toggle="tooltip" title="删除所有已生成的wav文件">清理所有wav文件</button>
-        </div>
-        <div class="col-12  mt-4" >
-			<div class="row" id="audio-container"></div>
-            <div class="m-2 bg-black text-white d-none" id="code"></div>
+        <div class="col-md-4 text-end">
+            <span class="badge bg-light text-dark border border-dark">v{{version}}</span>
         </div>
     </div>
-	
-	<div id="stream" class="d-none">
-		<audio controls id="stream_audio"></audio>
-	</div>
-	
-	<div class="text-center my-4">
-		<a class="btn btn-link text-secondary" href="https://github.com/jianchang512/chatTTS-ui" target="_blank">GitHub ChatTTS-UI</a>
-		<a class="btn btn-link text-secondary" href="https://github.com/2noise/ChatTTS" target="_blank">GitHub ChatTTS</a>
-	</div>
+
+    <div class="row">
+        <!-- Left Column: Input -->
+        <div class="col-lg-7">
+            <div class="brutal-box">
+                <div class="brutal-header">1. 文本输入 (Text Input)</div>
+                <textarea id="text-input" class="form-control mb-3" placeholder="在此输入要转换的文本,以行为单位合成..."></textarea>
+                
+                <div class="mb-3">
+                    <span class="section-label">控制符 (TOKENS)</span>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[laugh]">[laugh]</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[uv_break]">[uv_break]</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[oral_2]">[oral_2]</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[laugh_0]">[laugh_0]</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[break_6]">[break_6]</button>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="section-label">语气预设 (PRESETS)</span>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary tone-preset-btn" data-prompt="[oral_2][laugh_0][break_6]" title="适合聊天、轻松语气">聊天</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary tone-preset-btn" data-prompt="[oral_0][break_4]" title="适合播音、正式语气">播音</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary tone-preset-btn" data-prompt="[oral_3][laugh_1][break_3]" title="适合夸张、情绪较强">夸张</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Parameters -->
+        <div class="col-lg-5">
+            <div class="brutal-box">
+                <div class="brutal-header">2. 参数设置 (Params)</div>
+                
+                <!-- Voice Settings -->
+                <div class="mb-4 border-bottom border-dark pb-3">
+                    <span class="section-label">声音设置</span>
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-12">
+                            <div class="input-group">
+                                <span class="input-group-text">预设音色</span>
+                                <select id="voice" class="form-select">
+                                    {% for speaker in speakers %}
+                                        <option value="{{speaker}}">{{speaker}}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="input-group">
+                                <span class="input-group-text">自定义值</span>
+                                <input id="custom_voice" class="form-control" type="number" min="0" placeholder="如 2000 (覆盖上方选择)">
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="input-group">
+                                <span class="input-group-text">Text Seed</span>
+                                <input id="text_seed" class="form-control" value="42" type="number" min="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prompt & Segmentation -->
+                <div class="mb-4 border-bottom border-dark pb-3">
+                    <span class="section-label">高级控制</span>
+                    <div class="input-group mb-2">
+                        <span class="input-group-text">Prompt</span>
+                        <input id="prompt" value="[break_6]" class="form-control" placeholder="如 [oral_2][break_6]">
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="font12">分片长度</label>
+                            <input id="segment_len" class="form-control form-control-sm" value="0" type="number" min="0" title="0=自动">
+                        </div>
+                        <div class="col-6">
+                            <label class="font12">分片秒数</label>
+                            <input id="segment_seconds" class="form-control form-control-sm" value="0" type="number" min="0" step="1">
+                        </div>
+                    </div>
+                    <div class="form-check mt-2">
+                        <input type="checkbox" checked class="form-check-input" id="skip_refine" style="border: 2px solid black;">
+                        <label class="form-check-label fw-bold" for="skip_refine">跳过 Refine Text (推荐)</label>
+                    </div>
+                </div>
+
+                <!-- Sliders -->
+                <div id="temper_wrap">
+                    <span class="section-label">推理参数</span>
+                    
+                    <div class="row g-2 mb-2">
+                         <div class="col-6">
+                            <label class="font12">Speed: <span id="val-speed">5</span></label>
+                            <input type="range" class="form-range" id="speed" min="1" max="9" step="1" value="5" oninput="document.getElementById('val-speed').innerText=this.value">
+                        </div>
+                        <div class="col-6">
+                            <label class="font12">Temp: <span id="val-temp">0.1</span></label>
+                            <input type="range" class="form-range" id="temperature" min="0.00001" max="1.0" step="0.00001" value="0.1" oninput="document.getElementById('val-temp').innerText=this.value">
+                        </div>
+                        <div class="col-6">
+                            <label class="font12">Top_P: <span id="val-topp">0.7</span></label>
+                            <input type="range" class="form-range" id="top_p" min="0.001" max="0.9" step="0.05" value="0.7" oninput="document.getElementById('val-topp').innerText=this.value">
+                        </div>
+                        <div class="col-6">
+                            <label class="font12">Top_K: <span id="val-topk">20</span></label>
+                            <input type="range" class="form-range" id="top_k" min="1" max="20" step="1" value="20" oninput="document.getElementById('val-topk').innerText=this.value">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mt-2 d-none">
+                        <!-- Hidden or less used tokens params can stay here or be collapsed -->
+                         <div class="col-6">
+                            <label class="font12">Infer Token</label>
+                            <input id="infer_max_new_token" class="form-control form-control-sm" value="2048" type="number">
+                        </div>
+                        <div class="col-6">
+                             <label class="font12">Refine Token</label>
+                             <input id="refine_max_new_token" class="form-control form-control-sm" value="384" type="number">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions Row -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="brutal-box text-center" style="background: #000; color: white;">
+                <button id="submit-btn" class="btn btn-primary btn-lg w-50 py-3 fs-4">⚡ 立即合成声音</button>
+                <div class="mt-3 d-flex justify-content-center gap-3">
+                    <button id="upload-btn" class="btn btn-secondary btn-sm">
+                        📂 导入 TXT
+                        <input type="file" id="file-input" accept=".txt">
+                    </button>
+                    <button id="clear-btn" class="btn btn-danger btn-sm">🗑️ 清理所有音频</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Output Section -->
+    <div class="row">
+        <div class="col-12">
+            <div id="audio-container"></div>
+            <div class="m-2 bg-black text-white d-none p-3 border border-white" id="code" style="font-family: monospace;"></div>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="text-center my-5 py-4 border-top border-dark border-3">
+        <a class="btn btn-link text-dark fw-bold text-decoration-none" href="https://github.com/jianchang512/chatTTS-ui" target="_blank">[GITHUB: UI]</a>
+        <a class="btn btn-link text-dark fw-bold text-decoration-none" href="https://github.com/2noise/ChatTTS" target="_blank">[GITHUB: CORE]</a>
+    </div>
+</div>
+
+<!-- Hidden Inputs for JS compatibility if I missed any direct IDs in layout -->
+<div class="d-none">
+    <!-- Refine token hidden input if not displayed above -->
+    <input id="infer_max_new_token" value="2048">
+    <input id="refine_max_new_token" value="384">
 </div>
 
 <script src="/static/js/jquery.min.js"></script>
@@ -193,7 +333,11 @@
 <script src="/static/js/bootstrap.bundle.min.js"></script>
 <script>
 $(document).ready(function() {
-  $('[data-toggle="tooltip"]').tooltip();
+  // Initialize Tooltips
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-toggle="tooltip"]'))
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl)
+  });
 
     let audioGenerated = false;
 
@@ -225,23 +369,21 @@ $(document).ready(function() {
 		$container = $container || $('#audio-container');
 		$container.prepend(
 			`
-			  <div class="col-12 mb-2 pb-2 border-bottom audio-item" data-filename="${filename}">
-				<div>					
-					[${count}] ${filename} ${badge}
+			  <div class="col-12 audio-item brutal-box p-3" data-filename="${filename}">
+				<div class="d-flex justify-content-between align-items-center border-bottom border-dark pb-2 mb-2">					
+					<span class="fw-bold">[${count}] ${filename} ${badge}</span>
+                    <button onclick="$(this).closest('.audio-item').remove()" class="btn btn-sm btn-outline-dark py-0 px-2">X</button>
 				</div>
-				<div class="d-flex align-items-center my-1">
-					<a title="移除显示，不删除wav文件" href="javascripts:;" onclick="$(this).parent().parent().remove()" class="btn btn-close font12 me-2"></a>
-					<audio controls${autoplayAttr} src="${audio.url}"></audio>
-					<a href="${audio.url}" download="${filename}" class="btn btn-success ms-2">下载音频</a>
-					<button type="button" class="btn btn-outline-danger ms-2 delete-wav-btn">删除文件</button>
+				<div class="d-flex flex-wrap align-items-center my-2 gap-2">
+					<audio controls${autoplayAttr} src="${audio.url}" class="me-2" style="height: 40px; border: 2px solid black; border-radius: 0;"></audio>
+					<a href="${audio.url}" download="${filename}" class="btn btn-success btn-sm">⬇ 下载</a>
+					<button type="button" class="btn btn-danger btn-sm delete-wav-btn">删除</button>
+                    <button class="btn btn-info btn-sm show-js-btn" data-js-code="${encodeURIComponent(jsCode)}">API</button>
 				</div>
-				<div class="d-flex align-items-center text-secondary fs-6">
-					<button class="btn btn-info text-light me-2 show-js-btn" data-js-code="${encodeURIComponent(jsCode)}">显示API调用</button>
-					<span>
+				<div class="text-secondary font12 mt-1">
 					推理时长: ${audio.inference_time} 秒${durationText}
-					</span>
 				</div>
-				<div class="m-2 bg-black text-white d-none code-container p-1"></div>
+				<div class="mt-2 bg-black text-white d-none code-container p-2 font12"></div>
 			  </div>
 			`);
 	}
@@ -252,16 +394,16 @@ $(document).ready(function() {
 		}
 		let batchIndex = $('#audio-container').find('.audio-batch').length + 1;
 		let batchId = 'batch-' + Date.now() + '-' + Math.random().toString().slice(2, 7);
-		let headerText = `批次 ${batchIndex} (${audioList.length} 个文件)`;
+		let headerText = `BATCH #${batchIndex} [FILES: ${audioList.length}]`;
 		let batchHtml = `
-			<div class="col-12 mb-3 audio-batch" data-batch-id="${batchId}">
-			  <div class="d-flex justify-content-between align-items-center bg-light px-2 py-1 border">
-				<div>${headerText}</div>
+			<div class="col-12 mb-4 audio-batch" data-batch-id="${batchId}">
+			  <div class="d-flex justify-content-between align-items-center bg-black text-white px-3 py-2 border border-dark">
+				<div class="fw-bold">${headerText}</div>
 				<div>
-				  <button type="button" class="btn btn-sm btn-outline-danger delete-batch-btn">删除该批次</button>
+				  <button type="button" class="btn btn-sm btn-danger border-white delete-batch-btn">DELETE BATCH</button>
 				</div>
 			  </div>
-			  <div class="row mt-1 batch-body"></div>
+			  <div class="mt-2 batch-body"></div>
 			</div>
 		`;
 		$('#audio-container').prepend(batchHtml);
@@ -290,26 +432,20 @@ $(document).ready(function() {
 
 	loadAudioList();
 
-  $('#temper_wrap input[type="range"]').on('input',function(){
-	$(this).next().text(($(this).val()));
-  });
+    // Update slider values display
+    // (Handled by inline oninput, but keeping compatibility if needed)
+    $('#temper_wrap input[type="range"]').on('input',function(){
+        // Logic moved to inline for cleaner brutality
+    });
+
     $('#submit-btn').click(function() {
         var text = $('#text-input').val().trim();
         if (text === '') {
-            layer.alert('必须输入文本',{title:false});
+            layer.alert('必须输入文本',{title:false, skin: 'layui-layer-molv'});
         } else {
-			let index=layer.load();
+			let index=layer.load(1, {shade: [0.5,'#fff']}); // Use cleaner loader
 			let custom_voice=$('#custom_voice').val();
-			/*
-			text_list=text.split("\n").map(it=>{
-				it=it.trim()
-				if(it.length>150 && /。/.test(it)){
-					return it.replace(/。/g,"。\n")
-				}
-				return it    
-			});
-			text=text_list.join("")
-			*/
+			
 			let data={
 				text: text,
 				prompt:$('#prompt').val(),
@@ -360,10 +496,15 @@ $(document).ready(function() {
   });
 
   $(document).on('click', '.show-js-btn', function() {
-    let codeContainer = $(this).parent().next('.code-container');
+    let codeContainer = $(this).parent().next('.code-container'); // Logic adjustment for new layout?
+    // In new layout: .d-flex (btn parent) -> .font12 -> .code-container is sibling of .font12, not btn parent
+    // The btn is in a div, the code container is at the end of .audio-item
+    let item = $(this).closest('.audio-item');
+    codeContainer = item.find('.code-container');
+    
     codeContainer.toggleClass('d-none');
     if (!codeContainer.hasClass('d-none')) {
-      codeContainer.html(`<pre><code>${decodeURIComponent($(this).data('js-code'))}</code></pre>`);
+      codeContainer.html(`<pre style="margin:0; color:white;"><code>${decodeURIComponent($(this).data('js-code'))}</code></pre>`);
     }
   });
 
@@ -464,42 +605,38 @@ $(document).ready(function() {
 		  });
 		});
 	  });
+      
+    // Individual Delete
+    $(document).on('click', '.delete-wav-btn', function() {
+        // Find closest audio-item
+		var $item = $(this).closest('.audio-item');
+		var filename = $item.data('filename');
+		if (!filename) { return; }
+		
+		layer.confirm('Delete this audio?', {
+		  btn: ['Yes', 'No'],
+		  title: false
+		}, function() {
+		  $.ajax({
+			url: '/delete_wav',
+			type: 'POST',
+			data: { filename: filename },
+			success: function(response) {
+			  if (response.code === 0) {
+				$item.remove();
+				layer.alert('Deleted', {title: false});
+			  } else {
+				layer.alert('Failed: ' + response.msg, {title: false});
+			  }
+			},
+			error: function(xhr, status, error) {
+			  layer.alert('Error: ' + error, {title: false});
+			}
+		  });
+		});
+	});
 
-	
-
-
-
-/*
-let audio_queue=[]
-let audio_el=document.getElementById('stream_audio')
-const eventSource = new EventSource('/streamtts');
-eventSource.onmessage = function(event) {
-	console.log(event);
-	try{
-		let t=JSON.parse(event.data);
-		audio_queue.push(t)
-		if(audio_el.ended || !audio_el.getAttribute('src')){
-			goon_play();
-		}
-	}catch(e){}
-};
-function goon_play(){
-	if(audio_queue.length>0){
-		let t=audio_queue.shift();
-		audio_el.src=t['url']
-		audio_el.play()
-	}
-}
-
-
-
-audio_el.addEventListener("ended", (event) => {
-	goon_play()
 });
-audio_el.addEventListener("waiting", (event) => {
-	goon_play()
-});
-
-*/
 </script>
-</body></html>
+</body>
+</html>
