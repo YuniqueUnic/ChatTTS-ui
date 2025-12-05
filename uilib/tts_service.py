@@ -223,12 +223,10 @@ def _build_audio_files(filename_list, out_path, outname, inter_time, audio_durat
             except Exception as e:
                 print(f"计算分片音频时长失败: {part_path}, {e}")
 
-            relative_url = f"/static/wavs/{fname}"
             audio_files.append(
                 {
                     "filename": part_path,
-                    "url": relative_url,
-                    "relative_url": relative_url,
+                    "url": f"/static/wavs/{fname}",
                     "inference_time": round(inter_time, 2),
                     "audio_duration": part_duration,
                     "part_index": idx + 1,
@@ -237,12 +235,10 @@ def _build_audio_files(filename_list, out_path, outname, inter_time, audio_durat
             )
 
         # 追加合并后的完整音频
-        relative_url = f"/static/wavs/{outname}"
         audio_files.append(
             {
                 "filename": out_path,
-                "url": relative_url,
-                "relative_url": relative_url,
+                "url": f"/static/wavs/{outname}",
                 "inference_time": round(inter_time, 2),
                 "audio_duration": audio_duration,
                 "is_merged": 1,
@@ -250,12 +246,10 @@ def _build_audio_files(filename_list, out_path, outname, inter_time, audio_durat
         )
     else:
         # 默认保持原行为：仅返回合并后的完整音频
-        relative_url = f"/static/wavs/{outname}"
         audio_files.append(
             {
                 "filename": out_path,
-                "url": relative_url,
-                "relative_url": relative_url,
+                "url": f"/static/wavs/{outname}",
                 "inference_time": round(inter_time, 2),
                 "audio_duration": audio_duration,
             }
