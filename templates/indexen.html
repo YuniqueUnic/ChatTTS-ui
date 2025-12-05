@@ -2,330 +2,359 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChatTTS WebUI & API - v{{version}}</title>
     <link href="/static/js/bootstrap.min.css" rel="stylesheet">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <style>
+        /* === Global Reset === */
         :root {
-            --bg-color: #f0f0f0;
-            --surface-color: #ffffff;
-            --border-color: #000000;
-            --shadow-color: #000000;
-            --primary-color: #a8dadc;
-            --accent-color: #ff6b6b;
-            --text-color: #000000;
+            --border-color: #000;
             --border-width: 3px;
             --shadow-offset: 5px;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            font-family: 'Courier New', Courier, monospace; /* Brutalist style font */
-            color: var(--text-color);
-            padding-bottom: 50px;
-        }
-
-        /* Brutalist Components */
-        .brutal-box {
-            background-color: var(--surface-color);
-            border: var(--border-width) solid var(--border-color);
-            box-shadow: var(--shadow-offset) var(--shadow-offset) 0px var(--shadow-color);
-            padding: 20px;
-            margin-bottom: 25px;
-            transition: transform 0.2s;
+            --bg-color: #e0e7ff;
         }
         
-        .brutal-box:hover {
-            transform: translate(-1px, -1px);
+        body {
+            background-color: var(--bg-color);
+            font-family: 'Courier New', Courier, monospace;
+            color: #000;
+            height: 100vh;
+            overflow: hidden;
+            background-image: radial-gradient(#000 1px, transparent 1px);
+            background-size: 20px 20px;
         }
 
-        .brutal-header {
-            font-weight: 900;
-            text-transform: uppercase;
-            border-bottom: var(--border-width) solid var(--border-color);
-            padding-bottom: 10px;
+        /* === Layout Core (CSS Grid) === */
+        .app-container {
+            padding: 15px 25px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header-bar {
+            flex: 0 0 auto;
             margin-bottom: 20px;
-            letter-spacing: -1px;
+            background: #fff;
+            border: var(--border-width) solid #000;
+            box-shadow: 4px 4px 0 #000;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        /* Form Controls */
-        .form-control, .form-select, .input-group-text {
-            border: 2px solid var(--border-color) !important;
+        .main-grid {
+            flex: 1;
+            display: grid;
+            /* Config: 280px | Main: Flexible | Results: 340px */
+            grid-template-columns: 280px 1fr 340px;
+            gap: 25px;
+            min-height: 0;
+        }
+
+        /* === Responsive Layout (Mobile) === */
+        @media (max-width: 1000px) {
+            body { overflow: auto; height: auto; }
+            .app-container { height: auto; display: block; padding: 10px; }
+            
+            .main-grid {
+                display: flex;
+                flex-direction: column;
+                gap: 30px;
+                height: auto;
+            }
+
+            /* Reorder for Mobile */
+            .config-col { order: 2; } /* Config is 2nd */
+            .main-col   { order: 1; } /* Editor is 1st */
+            .result-col { order: 3; } /* Result is 3rd */
+
+            .panel-column {
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+            }
+            
+            #text-input { min-height: 250px; }
+        }
+
+        /* === Panels === */
+        .panel-column {
+            background: #fff;
+            border: var(--border-width) solid #000;
+            box-shadow: var(--shadow-offset) var(--shadow-offset) 0 #000;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+
+        .panel-header {
+            padding: 12px 18px;
+            border-bottom: var(--border-width) solid #000;
+            font-weight: 900;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            letter-spacing: 1px;
+        }
+
+        .panel-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* Panel Colors */
+        .header-config { background-color: #a5f3fc; }
+        .header-main   { background-color: #ff90e8; }
+        .header-result { background-color: #fde047; }
+
+        /* === Controls === */
+        .section-label {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: #444;
+            text-transform: uppercase;
+            margin: 20px 0 10px 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
+        }
+        .section-label:first-child { margin-top: 0; }
+
+        .form-control, .form-select {
+            border: 2px solid #000 !important;
             border-radius: 0 !important;
-            color: var(--text-color) !important;
-            box-shadow: 3px 3px 0px rgba(0,0,0,0.1);
             font-weight: 600;
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.05);
+            padding: 10px;
         }
-
         .form-control:focus, .form-select:focus {
-            box-shadow: 4px 4px 0px var(--border-color);
-            background-color: #fffae6;
-            transform: translate(-2px, -2px);
             outline: none;
+            box-shadow: 4px 4px 0 rgba(0,0,0,1);
+            background: #fff;
+            border-color: #000;
         }
 
-        .input-group-text {
-            background-color: var(--border-color) !important;
-            color: var(--surface-color) !important;
-            font-weight: bold;
+        textarea#text-input { 
+            resize: none; 
+            font-size: 1.1rem; 
+            line-height: 1.6;
+            padding: 15px;
+            width: 100%;
         }
 
-        /* Buttons */
+        /* === Buttons === */
         .btn {
-            border: 2px solid var(--border-color);
+            border: 2px solid #000;
             border-radius: 0;
-            box-shadow: 4px 4px 0px var(--shadow-color);
             font-weight: 800;
             text-transform: uppercase;
-            transition: all 0.15s;
-            margin: 5px;
             position: relative;
-            top: 0;
-            left: 0;
+            padding: 8px 16px;
         }
+        .btn:hover { filter: brightness(1.05); background-color: #f0f0f0; }
+        .btn:active { filter: brightness(0.95); }
 
-        .btn:hover {
-            box-shadow: 6px 6px 0px var(--shadow-color);
-            transform: translate(-2px, -2px);
+        .btn-main {
+            background: #000;
+            color: #fff;
+            width: 100%;
+            padding: 18px;
+            font-size: 1.3rem;
+            letter-spacing: 2px;
+            box-shadow: 4px 4px 0 #555;
+            margin-top: 10px;
         }
+        .btn-main:hover { color: #fde047; background: #222; box-shadow: 6px 6px 0 #555; }
 
-        .btn:active {
-            box-shadow: 2px 2px 0px var(--shadow-color);
-            transform: translate(2px, 2px);
+        .btn-tag {
+            background: #fff;
+            font-size: 0.85rem;
+            padding: 6px 10px;
+            margin: 0 6px 6px 0;
+            box-shadow: 3px 3px 0 #ddd;
+            border-width: 2px;
         }
+        .btn-tag:hover { background: #fde047; box-shadow: 3px 3px 0 #000; transform:translate(-1px,-1px); }
 
-        .btn-primary { background-color: #4cc9f0 !important; color: black !important; }
-        .btn-secondary { background-color: #e0e0e0 !important; color: black !important; }
-        .btn-warning { background-color: #ffd166 !important; color: black !important; }
-        .btn-danger { background-color: #ef476f !important; color: black !important; }
-        .btn-outline-secondary { color: black !important; border-color: black !important; }
-        .btn-outline-secondary:hover { background-color: black !important; color: white !important; }
-        .btn-info { background-color: #118ab2 !important; color: white !important; }
-        .btn-success { background-color: #06d6a0 !important; color: black !important; }
-
-        /* Sliders */
+        /* === Sliders === */
         input[type=range] {
-            accent-color: var(--border-color);
+            width: 100%;
+            height: 25px;
+            -webkit-appearance: none;
+            background: transparent;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #000;
+            border-radius: 0;
+        }
+        input[type=range]::-webkit-slider-thumb {
             height: 20px;
+            width: 20px;
+            background: #ff90e8;
+            border: 2px solid #000;
+            -webkit-appearance: none;
+            margin-top: -8px;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
         }
 
-        /* Custom UI tweaks */
-        #text-input {
-            min-height: 250px;
-            font-size: 1.1rem;
-            resize: vertical;
-        }
-
+        /* === Results === */
         .audio-item {
-            border: 2px solid var(--border-color);
+            border: 2px solid #000;
             background: #fff;
             margin-bottom: 15px;
             padding: 15px;
             box-shadow: 4px 4px 0 #ddd;
+            transition: all 0.2s;
         }
-        
-        .badge {
-            border: 1px solid black;
-            border-radius: 0;
-            color: black !important;
-        }
-        .badge.bg-success { background-color: #06d6a0 !important; }
-        .badge.bg-secondary { background-color: #ddd !important; }
+        .audio-item:hover { box-shadow: 6px 6px 0 #000; transform: translateX(-2px); }
 
-        /* Helper Classes */
-        .font12 { font-size: 12px; font-weight: bold; }
-        .param-label { font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; }
-        
+        /* === Scrollbar === */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #f5f5f5; border-left: 2px solid #000; }
+        ::-webkit-scrollbar-thumb { background: #000; border: 2px solid #fff; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+        /* === File Upload Fix === */
         #upload-btn { position: relative; overflow: hidden; }
-        #file-input { position: absolute; left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
-        
-        .section-label {
-            background: black;
-            color: white;
-            padding: 2px 8px;
-            font-weight: bold;
-            font-size: 0.9rem;
-            margin-bottom: 10px;
-            display: inline-block;
-        }
+        #file-input { position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:10; }
     </style>
 </head>
 <body>
 
-<div class="container my-5">
-    <div class="row mb-4 align-items-center">
-        <div class="col-md-8">
-            <h1 class="display-4" style="font-weight: 900; text-shadow: 3px 3px 0px #ddd;">CHAT_TTS <span style="font-size: 0.5em; background: black; color: white; padding: 0 10px;">WebUI</span></h1>
+<div class="app-container">
+    <div class="header-bar">
+        <div class="d-flex align-items-center gap-3">
+            <h1 class="m-0" style="font-weight:900; font-size:1.8rem;">CHAT_TTS <span style="color:#ff90e8">UI</span></h1>
+            <span class="badge bg-warning text-dark border border-dark rounded-0 p-2">v{{version}}</span>
         </div>
-        <div class="col-md-4 text-end">
-            <span class="badge bg-light text-dark border border-dark">v{{version}}</span>
-        </div>
+        <a href="https://github.com/jianchang512/chatTTS-ui" target="_blank" class="btn btn-light fw-bold">GITHUB</a>
     </div>
 
-    <div class="row">
-        <!-- Left Column: Input -->
-        <div class="col-lg-7">
-            <div class="brutal-box">
-                <div class="brutal-header">1. TEXT INPUT</div>
-                <textarea id="text-input" class="form-control mb-3" placeholder="Enter the text to be converted here, synthesize by line..."></textarea>
-                
+    <div class="main-grid">
+        
+        <!-- 1. Config (Left) -->
+        <div class="panel-column config-col">
+            <div class="panel-header header-config">
+                <span>CONFIGURATION</span><span>⚙️</span>
+            </div>
+            <div class="panel-body">
+                <div class="section-label">Voice Settings</div>
+                <select id="voice" class="form-select mb-3">
+                    {% for speaker in speakers %}
+                    <option value="{{speaker}}">{{speaker}}</option>
+                    {% endfor %}
+                </select>
+                <div class="row g-3 mb-3">
+                    <div class="col-6"><input id="custom_voice" type="number" class="form-control" placeholder="Custom ID"></div>
+                    <div class="col-6"><input id="text_seed" type="number" class="form-control" value="42" placeholder="Seed"></div>
+                </div>
+
+                <div class="section-label">Model Tuning</div>
                 <div class="mb-3">
-                    <span class="section-label">QUICK TOKENS</span>
-                    <div class="d-flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[laugh]">[laugh]</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[uv_break]">[uv_break]</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[oral_2]">[oral_2]</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[laugh_0]">[laugh_0]</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary tts-token-btn" data-token="[break_6]">[break_6]</button>
+                    <div class="d-flex justify-content-between fw-bold mb-1"><span>Speed</span><span class="badge bg-dark rounded-0" id="val-speed">5</span></div>
+                    <input type="range" id="speed" min="1" max="9" value="5" oninput="document.getElementById('val-speed').innerText=this.value">
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between fw-bold mb-1"><span>Temp</span><span class="badge bg-dark rounded-0" id="val-temp">0.1</span></div>
+                    <input type="range" id="temperature" min="0.00001" max="1.0" step="0.00001" value="0.1" oninput="document.getElementById('val-temp').innerText=this.value">
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <div class="d-flex justify-content-between fw-bold mb-1"><span>Top P</span><span class="small" id="val-topp">0.7</span></div>
+                        <input type="range" id="top_p" min="0.001" max="0.9" step="0.05" value="0.7" oninput="document.getElementById('val-topp').innerText=this.value">
+                    </div>
+                    <div class="col-6">
+                        <div class="d-flex justify-content-between fw-bold mb-1"><span>Top K</span><span class="small" id="val-topk">20</span></div>
+                        <input type="range" id="top_k" min="1" max="20" value="20" oninput="document.getElementById('val-topk').innerText=this.value">
                     </div>
                 </div>
 
-                <div>
-                    <span class="section-label">TONE PRESETS</span>
-                    <div class="d-flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary tone-preset-btn" data-prompt="[oral_2][laugh_0][break_6]" title="Casual chatting tone">Chat</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary tone-preset-btn" data-prompt="[oral_0][break_4]" title="Formal broadcast tone">Broadcast</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary tone-preset-btn" data-prompt="[oral_3][laugh_1][break_3]" title="Exaggerated, emotional tone">Exaggerated</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Column: Parameters -->
-        <div class="col-lg-5">
-            <div class="brutal-box">
-                <div class="brutal-header">2. PARAMETERS</div>
+                <div class="section-label">Prompt & Advanced</div>
+                <input id="prompt" class="form-control mb-3" value="[break_6]" placeholder="Prompt...">
                 
-                <!-- Voice Settings -->
-                <div class="mb-4 border-bottom border-dark pb-3">
-                    <span class="section-label">VOICE SETTINGS</span>
-                    <div class="row g-2 align-items-center mb-2">
-                        <div class="col-12">
-                            <div class="input-group">
-                                <span class="input-group-text">Select Voice</span>
-                                <select id="voice" class="form-select">
-                                    {% for speaker in speakers %}
-                                        <option value="{{speaker}}">{{speaker}}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
+                <button class="btn w-100 border-dark bg-light text-start py-2" type="button" data-bs-toggle="collapse" data-bs-target="#advConfig">
+                    ▼ Show Advanced
+                </button>
+                <div class="collapse" id="advConfig">
+                    <div class="card card-body border-dark rounded-0 p-3 bg-light mt-2">
+                        <div class="row g-3 mb-2">
+                            <div class="col-6"><label class="small fw-bold">Seg Len</label><input id="segment_len" type="number" class="form-control" value="0"></div>
+                            <div class="col-6"><label class="small fw-bold">Seg Sec</label><input id="segment_seconds" type="number" class="form-control" value="0"></div>
+                            <div class="col-6"><label class="small fw-bold">Infer</label><input id="infer_max_new_token" type="number" class="form-control" value="2048"></div>
+                            <div class="col-6"><label class="small fw-bold">Refine</label><input id="refine_max_new_token" type="number" class="form-control" value="384"></div>
                         </div>
-                        <div class="col-12">
-                            <div class="input-group">
-                                <span class="input-group-text">Custom Voice</span>
-                                <input id="custom_voice" class="form-control" type="number" min="0" placeholder="e.g. 2000 (overrides selection)">
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="input-group">
-                                <span class="input-group-text">Text Seed</span>
-                                <input id="text_seed" class="form-control" value="42" type="number" min="0">
-                            </div>
+                        <div class="form-check mt-2">
+                            <input type="checkbox" class="form-check-input border-dark" id="skip_refine" checked>
+                            <label class="form-check-label fw-bold" for="skip_refine">Skip Refine Text</label>
                         </div>
                     </div>
                 </div>
-
-                <!-- Prompt & Segmentation -->
-                <div class="mb-4 border-bottom border-dark pb-3">
-                    <span class="section-label">ADVANCED CONTROL</span>
-                    <div class="input-group mb-2">
-                        <span class="input-group-text">Prompt</span>
-                        <input id="prompt" value="[break_6]" class="form-control" placeholder="e.g. [oral_2][break_6]">
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <label class="font12">Segment Len</label>
-                            <input id="segment_len" class="form-control form-control-sm" value="0" type="number" min="0" title="0=auto">
-                        </div>
-                        <div class="col-6">
-                            <label class="font12">Segment Secs</label>
-                            <input id="segment_seconds" class="form-control form-control-sm" value="0" type="number" min="0" step="1">
-                        </div>
-                    </div>
-                    <div class="form-check mt-2">
-                        <input type="checkbox" checked class="form-check-input" id="skip_refine" style="border: 2px solid black;">
-                        <label class="form-check-label fw-bold" for="skip_refine">Skip Refine Text (Recommended)</label>
-                    </div>
-                </div>
-
-                <!-- Sliders -->
-                <div id="temper_wrap">
-                    <span class="section-label">INFERENCE PARAMS</span>
-                    
-                    <div class="row g-2 mb-2">
-                         <div class="col-6">
-                            <label class="font12">Speed: <span id="val-speed">5</span></label>
-                            <input type="range" class="form-range" id="speed" min="1" max="9" step="1" value="5" oninput="document.getElementById('val-speed').innerText=this.value">
-                        </div>
-                        <div class="col-6">
-                            <label class="font12">Temp: <span id="val-temp">0.1</span></label>
-                            <input type="range" class="form-range" id="temperature" min="0.00001" max="1.0" step="0.00001" value="0.1" oninput="document.getElementById('val-temp').innerText=this.value">
-                        </div>
-                        <div class="col-6">
-                            <label class="font12">Top_P: <span id="val-topp">0.7</span></label>
-                            <input type="range" class="form-range" id="top_p" min="0.001" max="0.9" step="0.05" value="0.7" oninput="document.getElementById('val-topp').innerText=this.value">
-                        </div>
-                        <div class="col-6">
-                            <label class="font12">Top_K: <span id="val-topk">20</span></label>
-                            <input type="range" class="form-range" id="top_k" min="1" max="20" step="1" value="20" oninput="document.getElementById('val-topk').innerText=this.value">
-                        </div>
-                    </div>
-
-                    <div class="row g-2 mt-2 d-none">
-                        <!-- Hidden or less used tokens params can stay here or be collapsed -->
-                         <div class="col-6">
-                            <label class="font12">Infer Token</label>
-                            <input id="infer_max_new_token" class="form-control form-control-sm" value="2048" type="number">
-                        </div>
-                        <div class="col-6">
-                             <label class="font12">Refine Token</label>
-                             <input id="refine_max_new_token" class="form-control form-control-sm" value="384" type="number">
-                        </div>
-                    </div>
-                </div>
-
             </div>
         </div>
-    </div>
 
-    <!-- Actions Row -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="brutal-box text-center" style="background: #000; color: white;">
-                <button id="submit-btn" class="btn btn-primary btn-lg w-50 py-3 fs-4">⚡ SYNTHESIZE VOICE NOW</button>
-                <div class="mt-3 d-flex justify-content-center gap-3">
-                    <button id="upload-btn" class="btn btn-secondary btn-sm">
+        <!-- 2. Main (Middle) -->
+        <div class="panel-column main-col">
+            <div class="panel-header header-main">
+                <span>WORKSPACE</span><span>📝</span>
+            </div>
+            <div class="panel-body d-flex flex-column">
+                <textarea id="text-input" class="form-control flex-grow-1 mb-4 w-100" placeholder="Enter text here...&#10;One sentence per line recommended..."></textarea>
+
+                <div class="section-label mt-0">Quick Tokens</div>
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <button class="btn btn-tag tts-token-btn" data-token="[laugh]">[laugh]</button>
+                    <button class="btn btn-tag tts-token-btn" data-token="[uv_break]">[uv_break]</button>
+                    <button class="btn btn-tag tts-token-btn" data-token="[oral_2]">[oral_2]</button>
+                    <button class="btn btn-tag tts-token-btn" data-token="[laugh_0]">[laugh_0]</button>
+                    <button class="btn btn-tag tts-token-btn" data-token="[break_6]">[break_6]</button>
+                </div>
+
+                <div class="section-label">Tone Presets</div>
+                <div class="d-flex gap-3 mb-4">
+                    <button class="btn btn-light flex-fill border-dark tone-preset-btn py-3" data-prompt="[oral_2][laugh_0][break_6]">😊 Chat</button>
+                    <button class="btn btn-light flex-fill border-dark tone-preset-btn py-3" data-prompt="[oral_0][break_4]">🎙️ Broadcast</button>
+                    <button class="btn btn-light flex-fill border-dark tone-preset-btn py-3" data-prompt="[oral_3][laugh_1][break_3]">🎭 Exaggerated</button>
+                </div>
+
+                <button id="submit-btn" class="btn btn-main mb-3">⚡ SYNTHESIZE AUDIO</button>
+                
+                <div class="d-flex gap-3 mt-3">
+                    <button id="upload-btn" class="btn btn-light flex-fill border-dark py-2 fw-bold">
                         📂 IMPORT TXT
                         <input type="file" id="file-input" accept=".txt">
                     </button>
-                    <button id="clear-btn" class="btn btn-danger btn-sm">🗑️ CLEAR ALL WAVs</button>
+                    <button id="clear-btn" class="btn btn-danger flex-fill border-dark py-2 fw-bold" style="background:#ff4d4d; color:white;">
+                        🗑️ CLEAR LIST
+                    </button>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Output Section -->
-    <div class="row">
-        <div class="col-12">
-            <div id="audio-container"></div>
-            <div class="m-2 bg-black text-white d-none p-3 border border-white" id="code" style="font-family: monospace;"></div>
+        <!-- 3. Results (Right) -->
+        <div class="panel-column result-col">
+            <div class="panel-header header-result">
+                <span>RESULTS</span><span>🎵</span>
+            </div>
+            <div class="panel-body" id="audio-container">
+                <div class="text-center text-muted mt-5" id="empty-state">
+                    <div style="font-size:4rem; opacity:0.15;">∅</div>
+                    <div class="fs-5 mt-2">No Audio Generated</div>
+                </div>
+            </div>
         </div>
-    </div>
-    
-    <!-- Footer -->
-    <div class="text-center my-5 py-4 border-top border-dark border-3">
-        <a class="btn btn-link text-dark fw-bold text-decoration-none" href="https://github.com/jianchang512/chatTTS-ui" target="_blank">[GITHUB: UI]</a>
-        <a class="btn btn-link text-dark fw-bold text-decoration-none" href="https://github.com/2noise/ChatTTS" target="_blank">[GITHUB: CORE]</a>
-    </div>
-</div>
 
-<!-- Hidden Inputs for JS compatibility if I missed any direct IDs in layout -->
-<div class="d-none">
-    <!-- Refine token hidden input if not displayed above -->
-    <input id="infer_max_new_token" value="2048">
-    <input id="refine_max_new_token" value="384">
+    </div>
 </div>
 
 <script src="/static/js/jquery.min.js"></script>
@@ -333,297 +362,201 @@
 <script src="/static/js/bootstrap.bundle.min.js"></script>
 <script>
 $(document).ready(function() {
-  // Initialize Tooltips
-  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-toggle="tooltip"]'))
-  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-    return new bootstrap.Tooltip(tooltipTriggerEl)
-  });
+    function insertToken($textarea, token) {
+        var el = $textarea.get(0);
+        if (!el) return;
+        var start = el.selectionStart || 0;
+        var end = el.selectionEnd || 0;
+        var value = el.value;
+        el.value = value.substring(0, start) + token + value.substring(end);
+        el.focus();
+        el.selectionStart = el.selectionEnd = start + token.length;
+    }
 
-    let audioGenerated = false;
+    function appendAudioItem(audio, autoPlay, jsCode, $container) {
+        $('#empty-state').remove();
+        var pos = audio.filename.lastIndexOf('/') + 1;
+        var filename = audio.filename.substr(pos);
+        var count = $('#audio-container').find('.audio-item').length + 1;
+        var badge = '';
+        if (audio.is_merged === 1) badge = '<span class="badge bg-success text-dark rounded-0 ms-1">Merged</span>';
+        else if (audio.part_index) badge = '<span class="badge bg-secondary text-dark rounded-0 ms-1">Part ' + audio.part_index + '</span>';
+        
+        var durationText = (audio.audio_duration && audio.audio_duration > 0) ? ' | ' + audio.audio_duration + 's' : '';
+        var autoplayAttr = autoPlay ? ' autoplay' : '';
+        jsCode = jsCode || '';
+        $container = $container || $('#audio-container');
 
-	function insertToken($textarea, token) {
-		var el = $textarea.get(0);
-		if (!el) { return; }
-		var start = el.selectionStart || 0;
-		var end = el.selectionEnd || 0;
-		var value = el.value;
-		el.value = value.substring(0, start) + token + value.substring(end);
-		el.focus();
-		var newPos = start + token.length;
-		el.selectionStart = el.selectionEnd = newPos;
-	}
+        var html = `
+        <div class="audio-item" data-filename="${filename}">
+            <div class="d-flex justify-content-between align-items-center border-bottom border-dark pb-2 mb-2">
+                <div class="fw-bold text-truncate" style="max-width:85%">#${count} ${filename} ${badge}</div>
+                <button onclick="deleteWavItem(this)" class="btn btn-link text-danger p-0 fw-bold text-decoration-none fs-4" style="line-height:1">&times;</button>
+            </div>
+            <audio controls${autoplayAttr} src="${audio.url}" style="width:100%; height:32px;"></audio>
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <div class="small text-muted">${audio.inference_time}s ${durationText}</div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-info btn-sm py-1 px-2 rounded-0 border-dark text-white fw-bold show-js-btn" data-js-code="${encodeURIComponent(jsCode)}">API</button>
+                    <a href="${audio.url}" download="${filename}" class="btn btn-success btn-sm py-1 px-2 rounded-0 border-dark fw-bold">DL</a>
+                </div>
+            </div>
+            <div class="mt-2 bg-dark text-light d-none code-container p-3 small text-break border border-dark font-monospace"></div>
+        </div>`;
+        $container.prepend(html);
+    }
 
-	function appendAudioItem(audio, autoPlay, jsCode, $container) {
-		let pos = audio.filename.lastIndexOf('/') + 1;
-		let filename = audio.filename.substr(pos);
-		let count = $('#audio-container').find('div.audio-item').length + 1;
-		let badge = '';
-		if (audio.is_merged === 1) {
-			badge = '<span class="badge bg-success ms-2">Merged</span>';
-		} else if (audio.part_index) {
-			badge = '<span class="badge bg-secondary ms-2">Part ' + audio.part_index + '</span>';
-		}
-		let durationText = (audio.audio_duration && audio.audio_duration > 0) ? ' | Duration: ' + audio.audio_duration + ' s' : '';
-		let autoplayAttr = autoPlay ? ' autoplay' : '';
-		jsCode = jsCode || '';
-		$container = $container || $('#audio-container');
-		$container.prepend(
-			`
-			  <div class="col-12 audio-item brutal-box p-3" data-filename="${filename}">
-				<div class="d-flex justify-content-between align-items-center border-bottom border-dark pb-2 mb-2">					
-					<span class="fw-bold">[${count}] ${filename} ${badge}</span>
-                    <button onclick="$(this).closest('.audio-item').remove()" class="btn btn-sm btn-outline-dark py-0 px-2">X</button>
-				</div>
-				<div class="d-flex flex-wrap align-items-center my-2 gap-2">
-					<audio controls${autoplayAttr} src="${audio.url}" class="me-2" style="height: 40px; border: 2px solid black; border-radius: 0;"></audio>
-					<a href="${audio.url}" download="${filename}" class="btn btn-success btn-sm">⬇ Download</a>
-					<button type="button" class="btn btn-danger btn-sm delete-wav-btn">Delete</button>
-                    <button class="btn btn-info btn-sm show-js-btn" data-js-code="${encodeURIComponent(jsCode)}">API</button>
-				</div>
-				<div class="text-secondary font12 mt-1">
-					Inference Time: ${audio.inference_time}s${durationText}
-				</div>
-				<div class="mt-2 bg-black text-white d-none code-container p-2 font12"></div>
-			  </div>
-			`);
-	}
+    function appendAudioBatch(audioList, data) {
+        if (!audioList || audioList.length === 0) return;
+        var batchIndex = $('#audio-container').find('.audio-batch').length + 1;
+        var batchId = 'batch-' + Date.now();
+        var html = `
+        <div class="audio-batch mb-4" data-batch-id="${batchId}">
+            <div class="bg-warning border border-dark p-2 px-3 d-flex justify-content-between align-items-center border-bottom-0">
+                <span class="fw-bold">BATCH #${batchIndex} [${audioList.length}]</span>
+                <button class="btn btn-dark btn-sm py-0 rounded-0 fw-bold delete-batch-btn">DEL ALL</button>
+            </div>
+            <div class="batch-body p-2 border border-dark bg-white"></div>
+        </div>`;
+        $('#audio-container').prepend(html);
+        var $body = $('#audio-container').find('.audio-batch').first().find('.batch-body');
+        
+        // Construct Python API Code Example
+        var pythonCode = 
+`import requests
+import json
 
-	function appendAudioBatch(audioList, data) {
-		if (!audioList || audioList.length === 0) {
-			return;
-		}
-		let batchIndex = $('#audio-container').find('.audio-batch').length + 1;
-		let batchId = 'batch-' + Date.now() + '-' + Math.random().toString().slice(2, 7);
-		let headerText = `BATCH #${batchIndex} [FILES: ${audioList.length}]`;
-		let batchHtml = `
-			<div class="col-12 mb-4 audio-batch" data-batch-id="${batchId}">
-			  <div class="d-flex justify-content-between align-items-center bg-black text-white px-3 py-2 border border-dark">
-				<div class="fw-bold">${headerText}</div>
-				<div>
-				  <button type="button" class="btn btn-sm btn-danger border-white delete-batch-btn">DELETE BATCH</button>
-				</div>
-			  </div>
-			  <div class="mt-2 batch-body"></div>
-			</div>
-		`;
-		$('#audio-container').prepend(batchHtml);
-		let $batch = $('#audio-container').find('.audio-batch').first();
-		let $body = $batch.find('.batch-body');
-		audioList.forEach(function(audio) {
-			let jsCode = `# API Call Code\n\nimport requests\n\nres = requests.post('http://${location.host}/tts', data=${JSON.stringify(data, null, 2)})\nprint(res.json())\n\n#ok\n{code:0, msg:'ok', audio_files:[{filename: ${audio.filename}, url: ${audio.url}}]}\n\n#error\n{code:1, msg:"error"}\n`;
-			appendAudioItem(audio, true, jsCode, $body);
-		});
-	}
+# API Endpoint
+url = "http://${location.host}/tts"
 
-	function loadAudioList() {
-		$.ajax({
-			url: '/list_wavs',
-			type: 'GET',
-			success: function(response) {
-				if (response.code === 0 && response.audio_files) {
-					$('#audio-container').empty();
-					response.audio_files.forEach(function(audio) {
-						appendAudioItem(audio, false, '');
-					});
-				}
-			}
-		});
-	}
+# Parameters
+data = ${JSON.stringify(data, null, 4)}
 
-	loadAudioList();
+# Send Request
+try:
+    response = requests.post(url, data=data)
+    if response.status_code == 200:
+        result = response.json()
+        print(json.dumps(result, indent=4, ensure_ascii=False))
+        # Output Format:
+        # {
+        #     "code": 0, 
+        #     "msg": "ok", 
+        #     "audio_files": [
+        #         {"filename": "...", "url": "...", "inference_time": ...}
+        #     ]
+        # }
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+except Exception as e:
+    print(f"Request Failed: {e}")
+`;
+        
+        audioList.forEach(function(audio) {
+            appendAudioItem(audio, true, pythonCode, $body);
+        });
+    }
 
-    // Update slider values display
-    // (Handled by inline oninput, but keeping compatibility if needed)
-    $('#temper_wrap input[type="range"]').on('input',function(){
-        // Logic moved to inline for cleaner brutality
-    });
+    function loadAudioList() {
+        $.ajax({
+            url: '/list_wavs',
+            type: 'GET',
+            success: function(response) {
+                if (response.code === 0 && response.audio_files && response.audio_files.length > 0) {
+                    $('#audio-container').empty();
+                    response.audio_files.forEach(function(audio) { appendAudioItem(audio, false, ''); });
+                }
+            }
+        });
+    }
+    loadAudioList();
 
     $('#submit-btn').click(function() {
         var text = $('#text-input').val().trim();
-        if (text === '') {
-            layer.alert('Must enter text',{title:false, skin: 'layui-layer-molv'});
-        } else {
-			let index=layer.load(1, {shade: [0.5,'#fff']}); // Use cleaner loader
-			let custom_voice=$('#custom_voice').val();
-			
-			let data={
-				text: text,
-				prompt:$('#prompt').val(),
-				voice:$('#voice').val(),
-				speed:parseInt($('#speed').val()),
-				temperature:parseFloat($('#temperature').val()),
-				top_p:parseFloat($('#top_p').val()),
-				top_k:parseInt($('#top_k').val()),
-				refine_max_new_token:parseInt($('#refine_max_new_token').val()),
-				infer_max_new_token:parseInt($('#infer_max_new_token').val()),
-				text_seed:parseInt($('#text_seed').val()),
-				text_seed:parseInt($('#text_seed').val()),
-				skip_refine:$('#skip_refine').prop('checked')?1:0,
-				is_stream:0,
-				custom_voice:custom_voice?parseInt(custom_voice):0,
-				segment_len:parseInt($('#segment_len').val() || 0),
-				segment_seconds:parseFloat($('#segment_seconds').val() || 0),
-				split:1
-			};
+        if (!text) { layer.msg('Enter text first'); return; }
+        var index = layer.load(1);
+        
+        var data = {
+            text: text,
+            prompt: $('#prompt').val(),
+            voice: $('#voice').val(),
+            speed: parseInt($('#speed').val()),
+            temperature: parseFloat($('#temperature').val()),
+            top_p: parseFloat($('#top_p').val()),
+            top_k: parseInt($('#top_k').val()),
+            refine_max_new_token: parseInt($('#refine_max_new_token').val()),
+            infer_max_new_token: parseInt($('#infer_max_new_token').val()),
+            text_seed: parseInt($('#text_seed').val()),
+            skip_refine: $('#skip_refine').prop('checked') ? 1 : 0,
+            is_stream: 0,
+            custom_voice: $('#custom_voice').val() ? parseInt($('#custom_voice').val()) : 0,
+            segment_len: parseInt($('#segment_len').val() || 0),
+            segment_seconds: parseFloat($('#segment_seconds').val() || 0),
+            split: 1
+        };
 
-      $.ajax({
-        url: '/tts',
-        type: 'POST',
-        data: data,
-        timeout: 3600000,
-        success: function(response) {
-          if (response.code === 0) {
-            console.log(response);
-            if (response.audio_files) {
-              appendAudioBatch(response.audio_files, data);
-              audioGenerated = true;
-            } else {
-              layer.alert('Audio generation failed', {title: false});
-            }
-          } else {
-            layer.alert(response.msg, {title: false});
-          }
-        },
-        error: function(xhr, status, error) {
-          layer.alert('Error: ' + error, {title: false});
-        },
-        complete: function() {
-          layer.close(index);
-        }
-      });
-    }
-  });
-
-  $(document).on('click', '.show-js-btn', function() {
-    let codeContainer = $(this).parent().next('.code-container'); // Logic adjustment for new layout?
-    // In new layout: .d-flex (btn parent) -> .font12 -> .code-container is sibling of .font12, not btn parent
-    // The btn is in a div, the code container is at the end of .audio-item
-    let item = $(this).closest('.audio-item');
-    codeContainer = item.find('.code-container');
-    
-    codeContainer.toggleClass('d-none');
-    if (!codeContainer.hasClass('d-none')) {
-      codeContainer.html(`<pre style="margin:0; color:white;"><code>${decodeURIComponent($(this).data('js-code'))}</code></pre>`);
-    }
-  });
-
-	$(document).on('click', '.tts-token-btn', function() {
-		var token = $(this).data('token');
-		insertToken($('#text-input'), token);
-	});
-
-	$(document).on('click', '.tone-preset-btn', function() {
-		var preset = $(this).data('prompt');
-		if (preset) {
-			$('#prompt').val(preset);
-		}
-	});
-
-	$('#upload-btn').click(function() {
-        $('#file-input').click()
+        $.ajax({
+            url: '/tts',
+            type: 'POST',
+            data: data,
+            success: function(res) {
+                layer.close(index);
+                if (res.code === 0 && res.audio_files) { appendAudioBatch(res.audio_files, data); }
+                else { layer.alert(res.msg || 'Failed', {title:false}); }
+            },
+            error: function(e) { layer.close(index); layer.alert('Error', {title:false}); }
+        });
     });
-    
-    $('#file-input').change(function(e) {
-        var file = e.target.files[0];
-        if(file) {
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                $('#text-input').val(e.target.result);
-            };
-            reader.readAsText(file, 'UTF-8');
+
+    $(document).on('click', '.show-js-btn', function() {
+        var box = $(this).closest('.audio-item').find('.code-container');
+        box.toggleClass('d-none');
+        if(!box.hasClass('d-none')) box.html('<pre style="margin:0;color:#a5f3fc;white-space:pre-wrap;">'+decodeURIComponent($(this).data('js-code'))+'</pre>');
+    });
+
+    $(document).on('click', '.tts-token-btn', function() { insertToken($('#text-input'), $(this).data('token')); });
+    $(document).on('click', '.tone-preset-btn', function() { 
+        if($(this).data('prompt')) $('#prompt').val($(this).data('prompt')); 
+    });
+
+    $('#upload-btn').click(function(){ $('#file-input').click(); });
+    $('#file-input').change(function(e){
+        var f = e.target.files[0];
+        if(f) {
+            var r = new FileReader();
+            r.onload = function(e) { $('#text-input').val(e.target.result); };
+            r.readAsText(f, 'UTF-8');
         }
     });
 
     $('#clear-btn').click(function() {
-    layer.confirm('Delete all wav files?', {
-      btn: ['Yes', 'No'],
-	  title:false
-    }, function() {
-	  layer.msg('Cleaning...')	 
-      $.ajax({
-        url: '/clear_wavs',
-        type: 'POST',
-        success: function(response) {
-          if (response.code === 0) {
-		    $('#audio-container').html('')
-            layer.alert('Successfully cleaned', {title: false});
-          } else {
-            layer.alert('Cleaning failed: ' + response.msg, {title: false});
-          }
-        },
-        error: function(xhr, status, error) {
-          layer.alert('Error: ' + error, {title: false});
-        }
-      });
+        layer.confirm('Clear all?', {title:false, btn:['Yes','No']}, function(){
+            $.ajax({url:'/clear_wavs', type:'POST', success:function(res){
+                if(res.code===0) { $('#audio-container').html('<div class="text-center text-muted mt-5" id="empty-state"><div style="font-size:4rem;opacity:0.15;">∅</div><div class="fs-5 mt-2">No Audio Generated</div></div>'); layer.msg('Cleared'); }
+            }});
+        });
     });
-  });
 
-  $(document).on('click', '.delete-batch-btn', function() {
-		var $batch = $(this).closest('.audio-batch');
-		var filenames = [];
-		$batch.find('.audio-item').each(function() {
-			var name = $(this).data('filename');
-			if (name) {
-				filenames.push(name);
-			}
-		});
-		if (filenames.length === 0) {
-			$batch.remove();
-			return;
-		}
-		layer.confirm('Delete all audio files in this batch?', {
-		  btn: ['Yes', 'No'],
-		  title:false
-		}, function() {
-		  $.ajax({
-			url: '/delete_wavs_batch',
-			type: 'POST',
-			data: { filenames: filenames.join(',') },
-			success: function(response) {
-			  if (response.code === 0) {
-				$batch.remove();
-				layer.alert('Batch deleted successfully', {title: false});
-			  } else {
-				layer.alert('Batch delete failed: ' + response.msg, {title: false});
-			  }
-			},
-			error: function(xhr, status, error) {
-			  layer.alert('Error: ' + error, {title: false});
-			}
-		  });
-		});
-	  });
-      
-    // Individual Delete
-    $(document).on('click', '.delete-wav-btn', function() {
-        // Find closest audio-item
-		var $item = $(this).closest('.audio-item');
-		var filename = $item.data('filename');
-		if (!filename) { return; }
-		
-		layer.confirm('Delete this audio file?', {
-		  btn: ['Yes', 'No'],
-		  title: false
-		}, function() {
-		  $.ajax({
-			url: '/delete_wav',
-			type: 'POST',
-			data: { filename: filename },
-			success: function(response) {
-			  if (response.code === 0) {
-				$item.remove();
-				layer.alert('Deleted successfully', {title: false});
-			  } else {
-				layer.alert('Delete failed: ' + response.msg, {title: false});
-			  }
-			},
-			error: function(xhr, status, error) {
-			  layer.alert('Error: ' + error, {title: false});
-			}
-		  });
-		});
-	});
+    $(document).on('click', '.delete-batch-btn', function() {
+        var $b = $(this).closest('.audio-batch');
+        var fs = [];
+        $b.find('.audio-item').each(function(){ fs.push($(this).data('filename')); });
+        if(!fs.length) { $b.remove(); return; }
+        layer.confirm('Delete batch?', {title:false}, function(){
+            $.ajax({url:'/delete_wavs_batch', type:'POST', data:{filenames:fs.join(',')}, success:function(res){
+                if(res.code===0) { $b.remove(); layer.msg('Deleted'); }
+            }});
+        });
+    });
 
+    window.deleteWavItem = function(btn) {
+        var $i = $(btn).closest('.audio-item');
+        var f = $i.data('filename');
+        if(!f) return;
+        $.ajax({url:'/delete_wav', type:'POST', data:{filename:f}, success:function(res){
+            if(res.code===0) $i.remove();
+        }});
+    };
 });
 </script>
 </body>
