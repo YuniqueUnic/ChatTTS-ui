@@ -296,7 +296,7 @@
                     <button id="select-all-btn" class="btn btn-dark">全选</button>
                     <button id="deselect-all-btn" class="btn btn-light border-dark">取消</button>
                     <button id="delete-selected-btn" class="btn text-white" style="background:#dc3545;">删除选中</button>
-                    <button id="clear-all-btn" class="btn btn-warning border-dark">清空全部</button>
+                    <button id="download-selected-btn" class="btn btn-success border-dark">批量下载</button>
                     <span class="select-count" id="select-count">0 选中</span>
                 </div>
                 <div id="audio-container">
@@ -495,16 +495,16 @@ $(document).ready(function() {
         });
     });
 
-    $('#clear-all-btn').click(function() {
-        layer.confirm('确定清空所有音频?', {title:false, btn:['是','否']}, function() {
-            $.ajax({ url: '/clear_wavs', type: 'POST', success: function(res) {
-                if (res.code === 0) {
-                    $('#audio-container').html('<div class="text-center text-muted mt-4" id="empty-state"><div style="font-size:3rem;opacity:0.15;">∅</div><div class="small">暂无生成记录</div></div>');
-                    updateBatchToolbar();
-                    layer.msg('已清空');
-                }
-            }});
-        });
+    $('#download-selected-btn').click(function() {
+        var fs = [];
+        $('#audio-container .item-checkbox:checked').each(function() { fs.push($(this).closest('.audio-item').data('filename')); });
+        if (!fs.length) { layer.msg('请先选择要下载的项'); return; }
+        var $form = $('<form method="POST" action="/download_wavs_batch"></form>');
+        var $input = $('<input type="hidden" name="filenames">').val(fs.join(','));
+        $form.append($input);
+        $('body').append($form);
+        $form.submit();
+        $form.remove();
     });
 
     // === Submit ===
