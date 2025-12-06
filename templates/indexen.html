@@ -11,8 +11,8 @@
             --border-width: 3px;
             --shadow-offset: 5px;
             --bg-color: #e0e7ff;
-            --col-config: 260px;
-            --col-result: 320px;
+            --col-config: 340px;
+            --col-result: 340px;
         }
         
         body {
@@ -55,6 +55,10 @@
             .app-container { height: auto; display: block; padding: 10px; }
             .main-grid { display: flex; flex-direction: column; gap: 20px; height: auto; }
             .config-col, .main-col, .result-col { width: 100% !important; height: auto !important; }
+            /* Mobile order: workspace (main) -> config -> result */
+            .main-col { order: 1; }
+            .config-col { order: 2; }
+            .result-col { order: 3; }
             .splitter { display: none; }
             .panel-column { height: auto !important; max-height: none !important; overflow: visible !important; }
             #text-input { min-height: 250px; }
