@@ -139,7 +139,13 @@ def num2text(text):
 
 
 def remove_brackets(text):
-    # 正则表达式: 识别所有支持的控制符, 包含带数字下标的形式
+    """Normalize brackets around known control tokens while stripping stray brackets.
+
+    This function is aware of ChatTTS control tokens and keeps them in [token] form:
+    [uv_break], [laugh], [lbreak], [break], [oral_N], [laugh_N], [break_N].
+    """
+
+    # 识别所有支持的控制符, 包含带数字下标的形式
     control_pattern = r'(uv_break|laugh|lbreak|break|oral_\d+|laugh_\d+|break_\d+)'
 
     # 先把形如 [token] 的控制符展开成裸 token, 方便清理多余符号
@@ -148,7 +154,7 @@ def remove_brackets(text):
     # 使用 re.sub 替换掉剩余的 [ ] 以及部分全角标点
     newt = re.sub(r'\[|\]|！|：|｛|｝', '', text)
 
-    # 再把控制符恢复为 [token] 形式, 并保证两侧有空格, 避免被文本归一化当成普通单词处理
+    # 再把控制符恢复为 [token] 形式, 并保证两侧有空格, 避免被归一化当成普通单词处理
     return re.sub(r'\s' + control_pattern + r'(?=\s|$)', r' [\1] ', newt, flags=re.I | re.S | re.M)
 
 
@@ -160,10 +166,7 @@ _CONTROL_TOKEN_RE = re.compile(
 
 
 def _encode_index(i: int) -> str:
-    """将数字索引编码为仅包含 A-Z 的字符串, 避免被数字归一化修改.
-
-    例如: 0 -> 'A', 1 -> 'B', 25 -> 'Z', 26 -> 'AA'.
-    """
+    """Encode numeric index into A-Z string to avoid interference with number normalization."""
 
     if i < 0:
         i = 0
@@ -177,7 +180,7 @@ def _encode_index(i: int) -> str:
 
 
 def _decode_index(tag: str) -> int:
-    """与 _encode_index 相反, 将 A-Z 串还原为数字索引."""
+    """Inverse of _encode_index, restore numeric index from A-Z string."""
 
     idx = 0
     for ch in tag:
@@ -186,7 +189,7 @@ def _decode_index(tag: str) -> int:
 
 
 def _protect_control_tokens(text: str):
-    """将 [control] 控制符替换为占位符 __CTRL_XX__ 并返回 (新文本, 控制符列表)."""
+    """Replace [control] tokens with placeholders __CTRL_XX__ and return (new_text, tokens)."""
 
     tokens = []
 
@@ -205,7 +208,7 @@ _CTRL_PLACEHOLDER_RE = re.compile(r'__CTRL_([A-Z]+)__')
 
 
 def _restore_control_tokens(text: str, tokens):
-    """将占位符 __CTRL_XX__ 还原回原始 [control] 控制符."""
+    """Restore __CTRL_XX__ placeholders back to original [control] tokens."""
 
     def repl(m: re.Match):
         tag = m.group(1)
@@ -228,7 +231,7 @@ def split_text(text_list, segment_len=None):
         text = remove_brackets(text)
         lang = get_lang(text)
 
-        # 在做任何归一化之前, 先保护控制符
+        # 在做任何归一化之前, 先保护控制符, 避免 oral_2 等被改写成 oral_二
         protected_text, ctrl_tokens = _protect_control_tokens(text)
 
         if lang == 'zh':

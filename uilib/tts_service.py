@@ -129,8 +129,10 @@ def _infer_and_save_segments(
             # use_decoder=False,
             stream=True if is_stream == 1 else False,
             skip_refine_text=skip_refine,
+            # 我们已经在 uilib.utils 中完成了中英文归一化和数字处理，此处关闭 ChatTTS 自带的归一化和同音字替换，
+            # 以确保 [uv_break] / [laugh] / [break_6] / [oral_2] 等控制符不会在内部被修改或删除。
             do_text_normalization=False,
-            do_homophone_replacement=True,
+            do_homophone_replacement=False,
             params_refine_text=params_refine_text,
             params_infer_code=params_infer_code,
         )
