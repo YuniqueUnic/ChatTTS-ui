@@ -209,6 +209,7 @@ $(document).ready(function() {
 		let autoplayAttr = autoPlay ? ' autoplay' : '';
 		jsCode = jsCode || '';
 		$container = $container || $('#audio-container');
+		let src = audio.relative_url || audio.url;
 		$container.prepend(
 			`
 			  <div class="col-12 mb-2 pb-2 border-bottom audio-item" data-filename="${filename}">
@@ -217,8 +218,8 @@ $(document).ready(function() {
 				</div>
 				<div class="d-flex align-items-center my-1">
 					<a title="移除显示，不删除wav文件" href="javascripts:;" onclick="$(this).parent().parent().remove()" class="btn btn-close font12 me-2"></a>
-					<audio controls${autoplayAttr} src="${audio.url}"></audio>
-					<a href="${audio.url}" download="${filename}" class="btn btn-success ms-2">下载音频</a>
+					<audio controls${autoplayAttr} src="${src}"></audio>
+					<a href="${src}" download="${filename}" class="btn btn-success ms-2">下载音频</a>
 					<button type="button" class="btn btn-outline-danger ms-2 delete-wav-btn">删除文件</button>
 				</div>
 				<div class="d-flex align-items-center text-secondary fs-6">
