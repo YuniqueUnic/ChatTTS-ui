@@ -57,8 +57,7 @@ class Normalizer:
 
         """
         self.coding = "utf-16-le" if sys.byteorder == "little" else "utf-16-be"
-        # 允许数字和控制符中使用的 '[', ']', '_'，避免将这些标记视为非法字符而被清理掉
-        self.reject_pattern = re.compile(r"[^\u4e00-\u9fffA-Za-z0-9\[\]_,，。、,\. ]")
+        self.reject_pattern = re.compile(r"[^\u4e00-\u9fffA-Za-z，。、,\. ]")
         self.sub_pattern = re.compile(r"\[uv_break\]|\[laugh\]|\[lbreak\]")
         self.chinese_char_pattern = re.compile(r"[\u4e00-\u9fff]")
         self.english_word_pattern = re.compile(r"\b[A-Za-z]+\b")
@@ -134,6 +133,10 @@ class Normalizer:
         do_homophone_replacement=True,
         lang: Optional[Literal["zh", "en"]] = None,
     ) -> str:
+        # 如果既不做文本归一化也不做同音字替换，则直接返回原文，避免误删控制符等特殊标记
+        if not do_text_normalization and not do_homophone_replacement:
+            return text
+
         if do_text_normalization:
             _lang = self._detect_language(text) if lang is None else lang
             if _lang in self.normalizers:
