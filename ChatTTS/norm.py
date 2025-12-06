@@ -57,7 +57,8 @@ class Normalizer:
 
         """
         self.coding = "utf-16-le" if sys.byteorder == "little" else "utf-16-be"
-        self.reject_pattern = re.compile(r"[^\u4e00-\u9fffA-Za-z，。、,\. ]")
+        # 允许数字和控制符中使用的 '[', ']', '_'，避免将这些标记视为非法字符而被清理掉
+        self.reject_pattern = re.compile(r"[^\u4e00-\u9fffA-Za-z0-9\[\]_,，。、,\. ]")
         self.sub_pattern = re.compile(r"\[uv_break\]|\[laugh\]|\[lbreak\]")
         self.chinese_char_pattern = re.compile(r"[\u4e00-\u9fff]")
         self.english_word_pattern = re.compile(r"\b[A-Za-z]+\b")
