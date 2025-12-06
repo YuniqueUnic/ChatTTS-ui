@@ -155,6 +155,8 @@
         <div class="github-links">
             <a href="https://github.com/jianchang512/chatTTS-ui" target="_blank">ChatTTS-UI</a>
             <a href="https://github.com/2noise/ChatTTS" target="_blank">ChatTTS</a>
+            <a href="/?lang=zh">中文</a>
+            <a href="/?lang=en">EN</a>
         </div>
     </div>
 
@@ -422,7 +424,7 @@ $(document).ready(function() {
         $('#audio-container').prepend(html);
         var $body = $('#audio-container').find('.audio-batch').first().find('.batch-body');
         var curl = buildCurlCode(data);
-        audioList.forEach(function(a) { appendAudioItem(a, true, curl, $body); });
+        audioList.forEach(function(a) { appendAudioItem(a, false, curl, $body); });
     }
 
     function loadAudioList() {
