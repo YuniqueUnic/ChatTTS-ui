@@ -155,6 +155,7 @@
         <div class="github-links">
             <a href="https://github.com/jianchang512/chatTTS-ui" target="_blank">ChatTTS-UI</a>
             <a href="https://github.com/2noise/ChatTTS" target="_blank">ChatTTS</a>
+            <a href="javascript:void(0)" id="save-workspace-btn">Save</a>
             <a href="/?lang=zh">中文</a>
             <a href="/?lang=en">EN</a>
         </div>
@@ -314,6 +315,8 @@
 <script>
 $(document).ready(function() {
     var $textarea = $('#text-input'), $lineNums = $('#line-numbers');
+    var LS_KEY = 'chattts_workspace_v1';
+    var saveTimer = null;
 
     function updateLineNumbers() {
         var lines = $textarea.val().split('\n').length;
@@ -323,6 +326,86 @@ $(document).ready(function() {
     }
     $textarea.on('input scroll', function() { updateLineNumbers(); $lineNums.scrollTop($textarea.scrollTop()); });
     updateLineNumbers();
+
+    function collectWorkspaceState() {
+        return {
+            text: $textarea.val(),
+            prompt: $('#prompt').val(),
+            voice: $('#voice').val(),
+            custom_voice: $('#custom_voice').val(),
+            text_seed: $('#text_seed').val(),
+            speed: $('#speed').val(),
+            temperature: $('#temperature').val(),
+            top_p: $('#top_p').val(),
+            top_k: $('#top_k').val(),
+            segment_len: $('#segment_len').val(),
+            segment_seconds: $('#segment_seconds').val(),
+            infer_max_new_token: $('#infer_max_new_token').val(),
+            refine_max_new_token: $('#refine_max_new_token').val(),
+            skip_refine: $('#skip_refine').prop('checked') ? 1 : 0,
+        };
+    }
+
+    function applyWorkspaceState(st) {
+        if (!st) return;
+        if (typeof st.text === 'string') {
+            $textarea.val(st.text);
+        }
+        if (st.prompt !== undefined) $('#prompt').val(st.prompt);
+        if (st.voice !== undefined) $('#voice').val(st.voice);
+        if (st.custom_voice !== undefined) $('#custom_voice').val(st.custom_voice);
+        if (st.text_seed !== undefined) $('#text_seed').val(st.text_seed);
+        if (st.speed !== undefined) {
+            $('#speed').val(st.speed);
+            $('#val-speed').text(st.speed);
+        }
+        if (st.temperature !== undefined) {
+            $('#temperature').val(st.temperature);
+            $('#val-temp').text(parseFloat(st.temperature).toFixed(2));
+        }
+        if (st.top_p !== undefined) {
+            $('#top_p').val(st.top_p);
+            $('#val-topp').text(parseFloat(st.top_p).toFixed(2));
+        }
+        if (st.top_k !== undefined) {
+            $('#top_k').val(st.top_k);
+            $('#val-topk').text(st.top_k);
+        }
+        if (st.segment_len !== undefined) $('#segment_len').val(st.segment_len);
+        if (st.segment_seconds !== undefined) $('#segment_seconds').val(st.segment_seconds);
+        if (st.infer_max_new_token !== undefined) $('#infer_max_new_token').val(st.infer_max_new_token);
+        if (st.refine_max_new_token !== undefined) $('#refine_max_new_token').val(st.refine_max_new_token);
+        if (st.skip_refine !== undefined) $('#skip_refine').prop('checked', !!st.skip_refine);
+        updateLineNumbers();
+    }
+
+    function saveWorkspaceState(showToast) {
+        if (!window.localStorage) {
+            if (showToast) layer.msg('LocalStorage not available');
+            return;
+        }
+        try {
+            localStorage.setItem(LS_KEY, JSON.stringify(collectWorkspaceState()));
+            if (showToast) layer.msg('Saved');
+        } catch (e) {
+            if (showToast) layer.msg('Save failed');
+        }
+    }
+
+    function scheduleAutoSave() {
+        if (!window.localStorage) return;
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(function() { saveWorkspaceState(false); }, 800);
+    }
+
+    if (window.localStorage) {
+        try {
+            var rawState = localStorage.getItem(LS_KEY);
+            if (rawState) {
+                applyWorkspaceState(JSON.parse(rawState));
+            }
+        } catch (e) {}
+    }
 
     function initSplitter(sid, leftId, rightId, minL, minR) {
         var $sp = $('#'+sid), $l = $('#'+leftId), $r = $('#'+rightId), drag = false;
@@ -355,11 +438,17 @@ $(document).ready(function() {
     }
 
     function formatTokens(text) {
-        return text
-            .replace(/([^\s\[\]])(\[(?:laugh|uv_break|lbreak|oral_\d|laugh_\d|break_\d)\])/g, '$1 $2')
-            .replace(/(\[(?:laugh|uv_break|lbreak|oral_\d|laugh_\d|break_\d)\])([^\s\[\]\n])/g, '$1 $2')
-            .replace(/\s{2,}/g, ' ')
-            .trim();
+        // Normalize tokens on each line, without touching explicit line breaks.
+        var lines = text.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            line = line
+                .replace(/([^\s\[\]])(\[(?:laugh|uv_break|lbreak|oral_\d|laugh_\d|break_\d)\])/g, '$1 $2')
+                .replace(/(\[(?:laugh|uv_break|lbreak|oral_\d|laugh_\d|break_\d)\])([^\s\[\]\n])/g, '$1 $2')
+                .replace(/ {2,}/g, ' ');
+            lines[i] = line;
+        }
+        return lines.join('\n');
     }
 
     $('#format-tokens-btn').click(function() {
@@ -367,6 +456,16 @@ $(document).ready(function() {
         var formatted = formatTokens(text);
         if (text !== formatted) { $textarea.val(formatted); updateLineNumbers(); layer.msg('Formatted'); }
         else { layer.msg('No changes needed'); }
+    });
+
+    // === Workspace Save / Restore bindings ===
+    $textarea.on('input', scheduleAutoSave);
+    $('#prompt, #voice, #custom_voice, #text_seed, #speed, #temperature, #top_p, #top_k, #segment_len, #segment_seconds, #infer_max_new_token, #refine_max_new_token')
+        .on('change input', scheduleAutoSave);
+    $('#skip_refine').on('change', scheduleAutoSave);
+
+    $('#save-workspace-btn').click(function() {
+        saveWorkspaceState(true);
     });
 
     function buildCurlCode(data) {
