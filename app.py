@@ -8,6 +8,7 @@ import io
 import json
 import torchaudio
 import wave
+import zipfile
 from pathlib import Path
 
 print("Starting...")
@@ -374,6 +375,63 @@ def delete_wavs_batch():
         return jsonify({"code": 1, "msg": "; ".join(errors), "deleted": deleted})
 
     return jsonify({"code": 0, "msg": "deleted", "deleted": deleted})
+
+
+@app.route('/download_wavs_batch', methods=['POST'])
+def download_wavs_batch():
+    """打包下载多个 wav 文件为一个 zip。
+
+    接收参数格式与 /delete_wavs_batch 相同：
+    - form 字段 'filenames' 为逗号/换行分隔的字符串，或
+    - JSON {"filenames": ["file1.wav", "file2.wav", ...]}
+    """
+
+    filenames = []
+
+    raw = request.form.get("filenames", "").strip()
+    if raw:
+        for name in re.split(r"[\n,]", raw):
+            name = name.strip()
+            if name:
+                filenames.append(name)
+    elif request.is_json:
+        data = request.get_json(silent=True) or {}
+        arr = data.get("filenames", [])
+        if isinstance(arr, list):
+            for name in arr:
+                name = str(name or "").strip()
+                if name:
+                    filenames.append(name)
+
+    if not filenames:
+        return jsonify({"code": 1, "msg": "filenames is required"}), 400
+
+    buf = io.BytesIO()
+    added = 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name in filenames:
+            # 安全检查：仅允许纯文件名，禁止路径穿越
+            if "/" in name or "\\" in name:
+                continue
+            file_path = os.path.join(WAVS_DIR, name)
+            if not os.path.isfile(file_path):
+                continue
+            zf.write(file_path, arcname=name)
+            added += 1
+
+    if not added:
+        return jsonify({"code": 1, "msg": "no valid files to download"}), 400
+
+    buf.seek(0)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_name = f"chattts_batch_{added}_{ts}.zip"
+    return send_file(
+        buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=zip_name,
+    )
+
 
 try:
     host = WEB_ADDRESS.split(':')
