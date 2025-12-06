@@ -46,3 +46,14 @@ def test_chattts_normalizer_keeps_control_tokens_when_no_normalization():
 
     for tok in ["[oral_2]", "[laugh_0]", "[break_6]", "[uv_break]"]:
         assert tok in out, f"token {tok} should be preserved by Normalizer, got: {out!r}"
+
+
+def test_chattts_normalizer_keeps_control_tokens_with_homophones_enabled():
+    homophones_path = os.path.join(os.path.dirname(ChatTTS.__file__), "res", "homophones_map.json")
+    norm = Normalizer(homophones_path)
+
+    text = "[oral_2] [laugh_0] [break_6] [uv_break]"
+    out = norm(text, do_text_normalization=False, do_homophone_replacement=True)
+
+    for tok in ["[oral_2]", "[laugh_0]", "[break_6]", "[uv_break]"]:
+        assert tok in out, f"token {tok} should be preserved with homophones enabled, got: {out!r}"
