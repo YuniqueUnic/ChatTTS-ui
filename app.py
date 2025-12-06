@@ -128,8 +128,18 @@ def static_files(filename):
 @app.route("/")
 def index():
     speakers = utils.get_speakers()
+    lang = request.args.get("lang", "").strip().lower()
+    if lang == "zh":
+        tpl = "index.html"
+    elif lang == "en":
+        tpl = "indexen.html"
+    else:
+        tpl = f"index{'' if is_cn else 'en'}.html"
     return render_template(
-        f"index{'' if is_cn else 'en'}.html", weburl=WEB_ADDRESS, speakers=speakers, version=VERSION
+        tpl,
+        weburl=WEB_ADDRESS,
+        speakers=speakers,
+        version=VERSION
     )
 
 
