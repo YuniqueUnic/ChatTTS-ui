@@ -139,12 +139,82 @@ def num2text(text):
 
 
 def remove_brackets(text):
-    # 正则表达式
-    text=re.sub(r'\[(uv_break|laugh|lbreak|break)\]',r' \1 ',text,re.I|re.S|re.M)
+    # 正则表达式: 识别所有支持的控制符, 包含带数字下标的形式
+    control_pattern = r'(uv_break|laugh|lbreak|break|oral_\d+|laugh_\d+|break_\d+)'
 
-    # 使用 re.sub 替换掉 [ ] 对
-    newt=re.sub(r'\[|\]|！|：|｛|｝', '', text)
-    return    re.sub(r'\s(uv_break|laugh|lbreak|break)(?=\s|$)', r' [\1] ', newt)
+    # 先把形如 [token] 的控制符展开成裸 token, 方便清理多余符号
+    text = re.sub(r'\[' + control_pattern + r'\]', r' \1 ', text, flags=re.I | re.S | re.M)
+
+    # 使用 re.sub 替换掉剩余的 [ ] 以及部分全角标点
+    newt = re.sub(r'\[|\]|！|：|｛|｝', '', text)
+
+    # 再把控制符恢复为 [token] 形式, 并保证两侧有空格, 避免被文本归一化当成普通单词处理
+    return re.sub(r'\s' + control_pattern + r'(?=\s|$)', r' [\1] ', newt, flags=re.I | re.S | re.M)
+
+
+# 保护/还原控制符, 防止在中英文归一化过程中被改写
+_CONTROL_TOKEN_RE = re.compile(
+    r'\[(uv_break|laugh|lbreak|break|oral_\d+|laugh_\d+|break_\d+)\]',
+    re.I,
+)
+
+
+def _encode_index(i: int) -> str:
+    """将数字索引编码为仅包含 A-Z 的字符串, 避免被数字归一化修改.
+
+    例如: 0 -> 'A', 1 -> 'B', 25 -> 'Z', 26 -> 'AA'.
+    """
+
+    if i < 0:
+        i = 0
+    chars = []
+    while True:
+        chars.append(chr(ord('A') + (i % 26)))
+        i //= 26
+        if i == 0:
+            break
+    return ''.join(reversed(chars))
+
+
+def _decode_index(tag: str) -> int:
+    """与 _encode_index 相反, 将 A-Z 串还原为数字索引."""
+
+    idx = 0
+    for ch in tag:
+        idx = idx * 26 + (ord(ch) - ord('A'))
+    return idx
+
+
+def _protect_control_tokens(text: str):
+    """将 [control] 控制符替换为占位符 __CTRL_XX__ 并返回 (新文本, 控制符列表)."""
+
+    tokens = []
+
+    def repl(m: re.Match):
+        full = m.group(0)  # 包含 [ ] 的完整 token
+        idx = len(tokens)
+        tokens.append(full)
+        tag = _encode_index(idx)
+        return f"__CTRL_{tag}__"
+
+    protected = _CONTROL_TOKEN_RE.sub(repl, text)
+    return protected, tokens
+
+
+_CTRL_PLACEHOLDER_RE = re.compile(r'__CTRL_([A-Z]+)__')
+
+
+def _restore_control_tokens(text: str, tokens):
+    """将占位符 __CTRL_XX__ 还原回原始 [control] 控制符."""
+
+    def repl(m: re.Match):
+        tag = m.group(1)
+        idx = _decode_index(tag)
+        if 0 <= idx < len(tokens):
+            return tokens[idx]
+        return m.group(0)
+
+    return _CTRL_PLACEHOLDER_RE.sub(repl, text)
 
 
 # 中英文数字转换为文字，特殊符号处理
@@ -155,23 +225,32 @@ def split_text(text_list, segment_len=None):
     max_len = segment_len if isinstance(segment_len, int) and segment_len > 0 else 200
     min_len = segment_len if isinstance(segment_len, int) and segment_len > 0 else 150
     for i,text in enumerate(text_list):
-        text=remove_brackets(text)
-        if get_lang(text)=='zh':
-            tmp="".join(tx.normalize(text))
+        text = remove_brackets(text)
+        lang = get_lang(text)
+
+        # 在做任何归一化之前, 先保护控制符
+        protected_text, ctrl_tokens = _protect_control_tokens(text)
+
+        if lang == 'zh':
+            tmp = "".join(tx.normalize(protected_text))
+            tmp = _restore_control_tokens(tmp, ctrl_tokens)
         elif haserror:
-            tmp=num2text(text)
+            tmp = num2text(protected_text)
+            tmp = _restore_control_tokens(tmp, ctrl_tokens)
         else:
             try:
                 # 先尝试使用 nemo_text_processing 处理英文
                 from nemo_text_processing.text_normalization.normalize import Normalizer
                 fun = partial(Normalizer(input_case='cased', lang="en").normalize, verbose=False, punct_post_process=True)
-                tmp=fun(text)
+                tmp = fun(protected_text)
+                tmp = _restore_control_tokens(tmp, ctrl_tokens)
                 print(f'使用nemo处理英文ok')
             except Exception as e:
                 print(f"nemo处理英文失败，改用自定义预处理")
                 print(e)
                 haserror=True
-                tmp=num2text(text)
+                tmp = num2text(protected_text)
+                tmp = _restore_control_tokens(tmp, ctrl_tokens)
 
         if len(tmp)>max_len:
             tmp_res=split_text_by_punctuation(tmp, min_length=min_len)
