@@ -294,7 +294,7 @@
                     <button id="select-all-btn" class="btn btn-dark">All</button>
                     <button id="deselect-all-btn" class="btn btn-light border-dark">None</button>
                     <button id="delete-selected-btn" class="btn text-white" style="background:#dc3545;">Delete</button>
-                    <button id="clear-all-btn" class="btn btn-warning border-dark">Clear All</button>
+                    <button id="download-selected-btn" class="btn btn-success border-dark">Batch Download</button>
                     <span class="select-count" id="select-count">0 selected</span>
                 </div>
                 <div id="audio-container">
@@ -476,16 +476,16 @@ $(document).ready(function() {
         });
     });
 
-    $('#clear-all-btn').click(function() {
-        layer.confirm('Clear all audio files?', {title:false, btn:['Yes','No']}, function() {
-            $.ajax({ url: '/clear_wavs', type: 'POST', success: function(res) {
-                if (res.code === 0) {
-                    $('#audio-container').html('<div class="text-center text-muted mt-4" id="empty-state"><div style="font-size:3rem;opacity:0.15;">∅</div><div class="small">No audio generated</div></div>');
-                    updateBatchToolbar();
-                    layer.msg('Cleared');
-                }
-            }});
-        });
+    $('#download-selected-btn').click(function() {
+        var fs = [];
+        $('#audio-container .item-checkbox:checked').each(function() { fs.push($(this).closest('.audio-item').data('filename')); });
+        if (!fs.length) { layer.msg('Select items first'); return; }
+        var $form = $('<form method="POST" action="/download_wavs_batch"></form>');
+        var $input = $('<input type="hidden" name="filenames">').val(fs.join(','));
+        $form.append($input);
+        $('body').append($form);
+        $form.submit();
+        $form.remove();
     });
 
     $('#submit-btn').click(function() {
