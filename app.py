@@ -265,13 +265,10 @@ def tts():
             torch.cuda.empty_cache()
     except Exception:
         pass
-    # 兼容pyVideoTrans接口调用
+    # 兼容 pyVideoTrans 接口调用：当只有一个音频时，补充 filename/url 字段
     if len(audio_files) == 1:
-        result_dict["filename"] = audio_files[0]['filename']
-        result_dict["url"] = audio_files[0]['url']
-    if len(audio_files) == 1:
-        result_dict["filename"] = audio_files[0]['filename']
-        result_dict["url"] = audio_files[0]['url']
+        result_dict["filename"] = audio_files[0]["filename"]
+        result_dict["url"] = audio_files[0]["url"]
 
     # 如果请求直接返回 wav 文件，则优先返回合并后的音频（如存在）
     if wav > 0:
@@ -280,17 +277,9 @@ def tts():
             if isinstance(it, dict) and it.get("is_merged") == 1:
                 target = it
                 break
-        return send_file(target['filename'], mimetype='audio/x-wav')
-    # 如果请求直接返回 wav 文件，则优先返回合并后的音频（如存在）
-    if wav > 0:
-        target = audio_files[0]
-        for it in audio_files:
-            if isinstance(it, dict) and it.get("is_merged") == 1:
-                target = it
-                break
-        return send_file(target['filename'], mimetype='audio/x-wav')
-    else:
-        return jsonify(result_dict)
+        return send_file(target["filename"], mimetype="audio/x-wav")
+
+    return jsonify(result_dict)
 
 
 @app.route("/clear_wavs", methods=["POST"])
