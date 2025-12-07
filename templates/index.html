@@ -501,6 +501,7 @@ $(document).ready(function() {
         var dur = (audio.audio_duration && audio.audio_duration > 0) ? ' | ' + audio.audio_duration + 's' : '';
         curlCode = curlCode || buildCurlCode(null);
         $container = $container || $('#audio-container');
+        var src = audio.relative_url || audio.url;
 
         var html = `
         <div class="audio-item" data-filename="${fn}">
@@ -509,12 +510,12 @@ $(document).ready(function() {
                 <div class="fw-bold text-truncate" style="max-width:75%; font-size:0.8rem;">#${cnt} ${fn}${badge}</div>
                 <button onclick="deleteWavItem(this)" class="btn btn-link text-danger p-0" style="font-size:1.2rem; line-height:1;">&times;</button>
             </div>
-            <audio controls${autoPlay ? ' autoplay' : ''} src="${audio.url}" style="width:100%; height:28px;"></audio>
+            <audio controls${autoPlay ? ' autoplay' : ''} src="${src}" style="width:100%; height:28px;"></audio>
             <div class="d-flex justify-content-between align-items-center mt-2">
                 <div class="text-muted" style="font-size:0.75rem;">${audio.inference_time || 0}s${dur}</div>
                 <div class="d-flex gap-1">
                     <button class="btn btn-info btn-sm py-0 px-1 rounded-0 border-dark text-white show-curl-btn" style="font-size:0.7rem;" data-curl="${encodeURIComponent(curlCode)}">API</button>
-                    <a href="${audio.url}" download="${fn}" class="btn btn-success btn-sm py-0 px-1 rounded-0 border-dark dl-btn" style="font-size:0.7rem;"><span class="short-text">DL</span><span class="full-text">Download</span></a>
+                    <a href="${src}" download="${fn}" class="btn btn-success btn-sm py-0 px-1 rounded-0 border-dark dl-btn" style="font-size:0.7rem;"><span class="short-text">DL</span><span class="full-text">Download</span></a>
                 </div>
             </div>
             <div class="mt-2 bg-dark text-light d-none curl-container p-2" style="font-size:0.7rem; word-break:break-all;"></div>

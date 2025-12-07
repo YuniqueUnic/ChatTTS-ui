@@ -11,7 +11,7 @@ import torchaudio
 import soundfile as sf
 import ChatTTS
 
-from uilib.cfg import SPEAKER_DIR, WAVS_DIR
+from uilib.cfg import SPEAKER_DIR, WAVS_DIR, WEB_ADDRESS
 from uilib import utils
 
 
@@ -212,6 +212,34 @@ def _merge_segments(filename_list, inter_time, text, voice_for_filename, tempera
     return outname, out_path, audio_duration
 
 
+def _build_full_url(relative_url: str) -> str:
+    """Build absolute URL for audio files while keeping relative_url for UI.
+
+    - Prefer current Flask request.host when running under HTTP.
+    - Fallback to WEB_ADDRESS env (host:port) if no request context.
+    - If both are unavailable, return the relative_url itself.
+    """
+
+    base = None
+
+    # Try to use current HTTP request host if Flask request context exists
+    try:
+        from flask import request  # type: ignore
+
+        host = getattr(request, "host", None)
+    except Exception:
+        host = None
+
+    if host:
+        base = host
+    elif WEB_ADDRESS:
+        base = WEB_ADDRESS
+
+    if base:
+        return f"http://{base}{relative_url}"
+    return relative_url
+
+
 def _build_audio_files(filename_list, out_path, outname, inter_time, audio_duration, split_mode):
     """Build the audio_files payload returned to the HTTP layer."""
 
@@ -227,10 +255,12 @@ def _build_audio_files(filename_list, out_path, outname, inter_time, audio_durat
             except Exception as e:
                 print(f"计算分片音频时长失败: {part_path}, {e}")
 
+            relative_url = f"/static/wavs/{fname}"
             audio_files.append(
                 {
                     "filename": part_path,
-                    "url": f"/static/wavs/{fname}",
+                    "url": _build_full_url(relative_url),
+                    "relative_url": relative_url,
                     "inference_time": round(inter_time, 2),
                     "audio_duration": part_duration,
                     "part_index": idx + 1,
@@ -239,10 +269,12 @@ def _build_audio_files(filename_list, out_path, outname, inter_time, audio_durat
             )
 
         # 追加合并后的完整音频
+        relative_url = f"/static/wavs/{outname}"
         audio_files.append(
             {
                 "filename": out_path,
-                "url": f"/static/wavs/{outname}",
+                "url": _build_full_url(relative_url),
+                "relative_url": relative_url,
                 "inference_time": round(inter_time, 2),
                 "audio_duration": audio_duration,
                 "is_merged": 1,
@@ -250,10 +282,12 @@ def _build_audio_files(filename_list, out_path, outname, inter_time, audio_durat
         )
     else:
         # 默认保持原行为：仅返回合并后的完整音频
+        relative_url = f"/static/wavs/{outname}"
         audio_files.append(
             {
                 "filename": out_path,
-                "url": f"/static/wavs/{outname}",
+                "url": _build_full_url(relative_url),
+                "relative_url": relative_url,
                 "inference_time": round(inter_time, 2),
                 "audio_duration": audio_duration,
             }

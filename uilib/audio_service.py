@@ -25,10 +25,12 @@ def list_audio_files():
             print(f"计算音频时长失败: {full_path}, {e}")
 
         stat = os.stat(full_path)
+        relative_url = f"/static/wavs/{name}"
         audio_files.append(
             {
                 "filename": full_path,
-                "url": f"/static/wavs/{name}",
+                "url": relative_url,
+                "relative_url": relative_url,
                 "inference_time": 0,
                 "audio_duration": duration,
                 "mtime": int(stat.st_mtime),
