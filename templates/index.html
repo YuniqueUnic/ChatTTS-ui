@@ -297,7 +297,7 @@
                     <button id="select-all-btn" class="btn btn-dark">全选</button>
                     <button id="deselect-all-btn" class="btn btn-light border-dark">取消</button>
                     <button id="delete-selected-btn" class="btn text-white" style="background:#dc3545;">删除选中</button>
-                    <button id="download-selected-btn" class="btn btn-success border-dark">批量下载</button>
+                    <button id="download-selected-btn" class="btn btn-success border-dark">下载选中</button>
                     <span class="select-count" id="select-count">0 选中</span>
                 </div>
                 <div id="audio-container">
@@ -482,12 +482,23 @@ $(document).ready(function() {
     });
 
     // === Generate cURL code ===
+    function escapeForCurl(val) {
+        if (val === null || val === undefined) return '';
+        var s = String(val);
+        // 转义反斜杠和双引号，并把换行折叠为 \n
+        s = s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, '\\n');
+        return s;
+    }
+
     function buildCurlCode(data) {
         if (!data || Object.keys(data).length === 0) {
             return 'curl -X POST "http://' + location.host + '/tts" \\\n  -d "text=YOUR_TEXT" \\\n  -d "voice=VOICE_NAME"';
         }
         var parts = [];
-        for (var k in data) { if (data.hasOwnProperty(k)) parts.push('-d "' + k + '=' + encodeURIComponent(data[k]) + '"'); }
+        for (var k in data) {
+            if (!data.hasOwnProperty(k)) continue;
+            parts.push('-d "' + k + '=' + escapeForCurl(data[k]) + '"');
+        }
         return 'curl -X POST "http://' + location.host + '/tts" \\\n  ' + parts.join(' \\\n  ');
     }
 
@@ -546,7 +557,9 @@ $(document).ready(function() {
         $.ajax({ url: '/list_wavs', type: 'GET', success: function(res) {
             if (res.code === 0 && res.audio_files && res.audio_files.length > 0) {
                 $('#audio-container').empty();
-                res.audio_files.forEach(function(a) { appendAudioItem(a, false, null, null); });
+                var ws = collectWorkspaceState();
+                var curlDefault = buildCurlCode(ws);
+                res.audio_files.forEach(function(a) { appendAudioItem(a, false, curlDefault, null); });
             }
             updateBatchToolbar();
         }});
@@ -581,15 +594,21 @@ $(document).ready(function() {
         $('#audio-container .item-checkbox:checked').each(function() { fs.push($(this).closest('.audio-item').data('filename')); });
         if (!fs.length) { layer.msg('请先选择要删除的项'); return; }
         layer.confirm('确定删除 ' + fs.length + ' 个音频?', {title:false, btn:['是','否']}, function() {
-            $.ajax({ url: '/delete_wavs_batch', type: 'POST', data: {filenames: fs.join(',')}, success: function(res) {
-                if (res.code === 0) {
-                    fs.forEach(function(f) { $('#audio-container .audio-item[data-filename="'+f+'"]').remove(); });
-                    // Clean empty batches
-                    $('#audio-container .audio-batch').each(function() { if (!$(this).find('.audio-item').length) $(this).remove(); });
-                    updateBatchToolbar();
-                    layer.msg('已删除 ' + fs.length + ' 项');
+            $.ajax({
+                url: '/delete_wavs_batch',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({filenames: fs}),
+                success: function(res) {
+                    if (res.code === 0) {
+                        fs.forEach(function(f) { $('#audio-container .audio-item[data-filename="'+f+'"]').remove(); });
+                        // 清除空批次
+                        $('#audio-container .audio-batch').each(function() { if (!$(this).find('.audio-item').length) $(this).remove(); });
+                        updateBatchToolbar();
+                        layer.msg('已删除 ' + fs.length + ' 项');
+                    }
                 }
-            }});
+            });
         });
     });
 
@@ -598,7 +617,8 @@ $(document).ready(function() {
         $('#audio-container .item-checkbox:checked').each(function() { fs.push($(this).closest('.audio-item').data('filename')); });
         if (!fs.length) { layer.msg('请先选择要下载的项'); return; }
         var $form = $('<form method="POST" action="/download_wavs_batch"></form>');
-        var $input = $('<input type="hidden" name="filenames">').val(fs.join(','));
+        // 使用换行作为分隔符，避免与文件名中的逗号冲突
+        var $input = $('<input type="hidden" name="filenames">').val(fs.join('\n'));
         $form.append($input);
         $('body').append($form);
         $form.submit();
@@ -656,9 +676,15 @@ $(document).ready(function() {
         $b.find('.audio-item').each(function() { fs.push($(this).data('filename')); });
         if (!fs.length) { $b.remove(); return; }
         layer.confirm('删除本批次?', {title:false}, function() {
-            $.ajax({ url: '/delete_wavs_batch', type: 'POST', data: {filenames: fs.join(',')}, success: function(res) {
-                if (res.code === 0) { $b.remove(); updateBatchToolbar(); layer.msg('已删除'); }
-            }});
+            $.ajax({
+                url: '/delete_wavs_batch',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({filenames: fs}),
+                success: function(res) {
+                    if (res.code === 0) { $b.remove(); updateBatchToolbar(); layer.msg('已删除'); }
+                }
+            });
         });
     });
 
