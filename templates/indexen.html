@@ -295,7 +295,7 @@
                     <button id="select-all-btn" class="btn btn-dark">All</button>
                     <button id="deselect-all-btn" class="btn btn-light border-dark">None</button>
                     <button id="delete-selected-btn" class="btn text-white" style="background:#dc3545;">Delete</button>
-                    <button id="download-selected-btn" class="btn btn-success border-dark">Batch Download</button>
+                    <button id="download-selected-btn" class="btn btn-success border-dark">Download</button>
                     <span class="select-count" id="select-count">0 selected</span>
                 </div>
                 <div id="audio-container">
@@ -468,12 +468,23 @@ $(document).ready(function() {
         saveWorkspaceState(true);
     });
 
+    function escapeForCurl(val) {
+        if (val === null || val === undefined) return '';
+        var s = String(val);
+        // Escape backslashes and double quotes, flatten newlines
+        s = s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, '\\n');
+        return s;
+    }
+
     function buildCurlCode(data) {
         if (!data || Object.keys(data).length === 0) {
             return 'curl -X POST "http://' + location.host + '/tts" \\\n  -d "text=YOUR_TEXT" \\\n  -d "voice=VOICE_NAME"';
         }
         var parts = [];
-        for (var k in data) { if (data.hasOwnProperty(k)) parts.push('-d "' + k + '=' + encodeURIComponent(data[k]) + '"'); }
+        for (var k in data) {
+            if (!data.hasOwnProperty(k)) continue;
+            parts.push('-d "' + k + '=' + escapeForCurl(data[k]) + '"');
+        }
         return 'curl -X POST "http://' + location.host + '/tts" \\\n  ' + parts.join(' \\\n  ');
     }
 
@@ -531,7 +542,9 @@ $(document).ready(function() {
         $.ajax({ url: '/list_wavs', type: 'GET', success: function(res) {
             if (res.code === 0 && res.audio_files && res.audio_files.length > 0) {
                 $('#audio-container').empty();
-                res.audio_files.forEach(function(a) { appendAudioItem(a, false, null, null); });
+                var ws = collectWorkspaceState();
+                var curlDefault = buildCurlCode(ws);
+                res.audio_files.forEach(function(a) { appendAudioItem(a, false, curlDefault, null); });
             }
             updateBatchToolbar();
         }});
@@ -565,14 +578,20 @@ $(document).ready(function() {
         $('#audio-container .item-checkbox:checked').each(function() { fs.push($(this).closest('.audio-item').data('filename')); });
         if (!fs.length) { layer.msg('Select items first'); return; }
         layer.confirm('Delete ' + fs.length + ' audio files?', {title:false, btn:['Yes','No']}, function() {
-            $.ajax({ url: '/delete_wavs_batch', type: 'POST', data: {filenames: fs.join(',')}, success: function(res) {
-                if (res.code === 0) {
-                    fs.forEach(function(f) { $('#audio-container .audio-item[data-filename="'+f+'"]').remove(); });
-                    $('#audio-container .audio-batch').each(function() { if (!$(this).find('.audio-item').length) $(this).remove(); });
-                    updateBatchToolbar();
-                    layer.msg('Deleted ' + fs.length + ' items');
+            $.ajax({
+                url: '/delete_wavs_batch',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({filenames: fs}),
+                success: function(res) {
+                    if (res.code === 0) {
+                        fs.forEach(function(f) { $('#audio-container .audio-item[data-filename="'+f+'"]').remove(); });
+                        $('#audio-container .audio-batch').each(function() { if (!$(this).find('.audio-item').length) $(this).remove(); });
+                        updateBatchToolbar();
+                        layer.msg('Deleted ' + fs.length + ' items');
+                    }
                 }
-            }});
+            });
         });
     });
 
@@ -581,7 +600,8 @@ $(document).ready(function() {
         $('#audio-container .item-checkbox:checked').each(function() { fs.push($(this).closest('.audio-item').data('filename')); });
         if (!fs.length) { layer.msg('Select items first'); return; }
         var $form = $('<form method="POST" action="/download_wavs_batch"></form>');
-        var $input = $('<input type="hidden" name="filenames">').val(fs.join(','));
+        // Use newline separator to avoid ambiguity with commas in filenames
+        var $input = $('<input type="hidden" name="filenames">').val(fs.join('\n'));
         $form.append($input);
         $('body').append($form);
         $form.submit();
@@ -637,9 +657,15 @@ $(document).ready(function() {
         $b.find('.audio-item').each(function() { fs.push($(this).data('filename')); });
         if (!fs.length) { $b.remove(); return; }
         layer.confirm('Delete batch?', {title:false}, function() {
-            $.ajax({ url: '/delete_wavs_batch', type: 'POST', data: {filenames: fs.join(',')}, success: function(res) {
-                if (res.code === 0) { $b.remove(); updateBatchToolbar(); layer.msg('Deleted'); }
-            }});
+            $.ajax({
+                url: '/delete_wavs_batch',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({filenames: fs}),
+                success: function(res) {
+                    if (res.code === 0) { $b.remove(); updateBatchToolbar(); layer.msg('Deleted'); }
+                }
+            });
         });
     });
 

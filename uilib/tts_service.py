@@ -15,6 +15,37 @@ from uilib.cfg import SPEAKER_DIR, WAVS_DIR, WEB_ADDRESS
 from uilib import utils
 
 
+def _build_text_slug(text: str, max_len: int = 40) -> str:
+    """Build a short, human-readable slug from text, ignoring control tokens."""
+
+    # Normalize common non-breaking spaces and collapse whitespace
+    txt = text.replace("\u00a0", " ")
+    txt = " ".join(txt.split())
+
+    # Drop ChatTTS control tokens like [uv_break], [laugh], [oral_2], etc.
+    txt = re.sub(
+        r"\[(?:uv_break|laugh|lbreak|break|oral_\d+|laugh_\d+|break_\d+)\]",
+        " ",
+        txt,
+        flags=re.I,
+    )
+    txt = txt.strip()
+    if not txt:
+        return "audio"
+
+    # Truncate early to avoid overly long filenames
+    txt = txt[:max_len]
+
+    # Replace whitespace with underscores
+    slug = re.sub(r"\s+", "_", txt)
+    # Remove characters invalid in filenames on common OSes (including '.', ',' and '，')
+    slug = re.sub(r"[\\/:*?\"<>|\.,，]+", "_", slug)
+    # Collapse duplicate underscores and trim
+    slug = re.sub(r"_+", "_", slug).strip("_")
+
+    return slug or "audio"
+
+
 def _select_speaker(chat, voice: str, custom_voice: int, device):
     """Choose or create a speaker embedding based on voice/custom_voice.
 
@@ -146,8 +177,16 @@ def _infer_and_save_segments(
         print(f"推理时长: {inference_time_rounded} 秒")
 
         for j, w in enumerate(wavs):
+            # Build slug from the corresponding text element for this wav
+            if isinstance(te, (list, tuple)) and j < len(te):
+                seg_text = str(te[j])
+            else:
+                seg_text = str(te)
+
+            slug = _build_text_slug(seg_text)
+            time_prefix = datetime.datetime.now().strftime("%H%M%S_")
             filename = (
-                datetime.datetime.now().strftime("%H%M%S_")
+                f"{time_prefix}{slug}_"
                 + f"use{inference_time_rounded}s-seed{voice_for_filename}-te{temperature}-tp{top_p}-tk{top_k}-textlen{len(text)}-{str(random())[2:7]}"
                 + f"-{i}-{j}.wav"
             )
@@ -166,8 +205,11 @@ def _merge_segments(filename_list, inter_time, text, voice_for_filename, tempera
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(txt_tmp)
 
+    slug_base = _build_text_slug(text)
+    slug = f"merged_{slug_base}"
     outname = (
         datetime.datetime.now().strftime("%H%M%S_")
+        + f"{slug}_"
         + f"use{inter_time}s-audio{audio_time}s-seed{voice_for_filename}-te{temperature}-tp{top_p}-tk{top_k}-textlen{len(text)}-{str(random())[2:7]}"
         + "-merge.wav"
     )
